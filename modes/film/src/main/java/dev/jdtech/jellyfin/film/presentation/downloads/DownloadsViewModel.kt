@@ -7,10 +7,11 @@ import dev.jdtech.jellyfin.core.Constants
 import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.film.presentation.collection.CollectionState
 import dev.jdtech.jellyfin.models.CollectionSection
-import dev.jdtech.jellyfin.models.FindroidMovie
-import dev.jdtech.jellyfin.models.FindroidShow
+import dev.jdtech.jellyfin.models.JellyxMovie
+import dev.jdtech.jellyfin.models.JellyxShow
 import dev.jdtech.jellyfin.models.UiText
 import dev.jdtech.jellyfin.repository.JellyfinRepository
+import dev.jdtech.jellyfin.utils.Downloader
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,8 +20,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @HiltViewModel
-class DownloadsViewModel @Inject constructor(private val repository: JellyfinRepository) :
-    ViewModel() {
+class DownloadsViewModel
+@Inject
+constructor(
+    private val repository: JellyfinRepository,
+    private val downloader: Downloader,
+) : ViewModel() {
     private val _state = MutableStateFlow(CollectionState())
     val state = _state.asStateFlow()
 
@@ -29,6 +34,7 @@ class DownloadsViewModel @Inject constructor(private val repository: JellyfinRep
             _state.emit(_state.value.copy(isLoading = true, error = null))
 
             try {
+                runCatching { downloader.reconcileCompletedDownloads() }
                 val items = repository.getDownloads()
 
                 val sections = mutableListOf<CollectionSection>()
@@ -37,7 +43,7 @@ class DownloadsViewModel @Inject constructor(private val repository: JellyfinRep
                     CollectionSection(
                             Constants.FAVORITE_TYPE_MOVIES,
                             UiText.StringResource(CoreR.string.movies_label),
-                            items.filterIsInstance<FindroidMovie>(),
+                            items.filterIsInstance<JellyxMovie>(),
                         )
                         .let {
                             if (it.items.isNotEmpty()) {
@@ -47,7 +53,7 @@ class DownloadsViewModel @Inject constructor(private val repository: JellyfinRep
                     CollectionSection(
                             Constants.FAVORITE_TYPE_SHOWS,
                             UiText.StringResource(CoreR.string.shows_label),
-                            items.filterIsInstance<FindroidShow>(),
+                            items.filterIsInstance<JellyxShow>(),
                         )
                         .let {
                             if (it.items.isNotEmpty()) {

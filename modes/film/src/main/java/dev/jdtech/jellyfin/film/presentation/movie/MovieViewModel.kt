@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.jdtech.jellyfin.film.domain.VideoMetadataParser
-import dev.jdtech.jellyfin.models.FindroidItemPerson
-import dev.jdtech.jellyfin.models.FindroidMovie
+import dev.jdtech.jellyfin.models.JellyxItemPerson
+import dev.jdtech.jellyfin.models.JellyxMovie
 import dev.jdtech.jellyfin.repository.JellyfinRepository
 import dev.jdtech.jellyfin.settings.domain.AppPreferences
 import java.util.UUID
@@ -35,7 +35,7 @@ constructor(
         viewModelScope.launch {
             try {
                 val movie = repository.getMovie(movieId)
-                val videoMetadata = videoMetadataParser.parse(movie.sources.first())
+                val videoMetadata = videoMetadataParser.parse(movie.sources)
                 val actors = getActors(movie)
                 val director = getDirector(movie)
                 val writers = getWriters(movie)
@@ -56,7 +56,7 @@ constructor(
         }
     }
 
-    private suspend fun getActors(item: FindroidMovie): List<FindroidItemPerson> {
+    private suspend fun getActors(item: JellyxMovie): List<JellyxItemPerson> {
         return withContext(Dispatchers.Default) {
             item.people
                 .filter { it.type == PersonKind.ACTOR }
@@ -65,13 +65,13 @@ constructor(
         }
     }
 
-    private suspend fun getDirector(item: FindroidMovie): FindroidItemPerson? {
+    private suspend fun getDirector(item: JellyxMovie): JellyxItemPerson? {
         return withContext(Dispatchers.Default) {
             item.people.firstOrNull { it.type == PersonKind.DIRECTOR }
         }
     }
 
-    private suspend fun getWriters(item: FindroidMovie): List<FindroidItemPerson> {
+    private suspend fun getWriters(item: JellyxMovie): List<JellyxItemPerson> {
         return withContext(Dispatchers.Default) {
             item.people.filter { it.type == PersonKind.WRITER }.distinctBy { it.id }
         }

@@ -1,9 +1,9 @@
 package dev.jdtech.jellyfin.film.presentation.media
 
-import dev.jdtech.jellyfin.models.FindroidCollection
+import dev.jdtech.jellyfin.models.JellyxCollection
 
 sealed interface MediaAction {
-    data class OnItemClick(val item: FindroidCollection) : MediaAction
+    data class OnItemClick(val item: JellyxCollection) : MediaAction
 
     data object OnFavoritesClick : MediaAction
 

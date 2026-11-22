@@ -1,24 +1,24 @@
 package dev.jdtech.jellyfin.core.presentation.dummy
 
 import dev.jdtech.jellyfin.models.CollectionType
-import dev.jdtech.jellyfin.models.FindroidCollection
-import dev.jdtech.jellyfin.models.FindroidImages
+import dev.jdtech.jellyfin.models.JellyxCollection
+import dev.jdtech.jellyfin.models.JellyxImages
 import java.util.UUID
 
 private val dummyMoviesCollection =
-    FindroidCollection(
+    JellyxCollection(
         id = UUID.randomUUID(),
         name = "Movies",
         type = CollectionType.Movies,
-        images = FindroidImages(),
+        images = JellyxImages(),
     )
 
 private val dummyShowsCollection =
-    FindroidCollection(
+    JellyxCollection(
         id = UUID.randomUUID(),
         name = "Shows",
         type = CollectionType.TvShows,
-        images = FindroidImages(),
+        images = JellyxImages(),
     )
 
 val dummyCollections = listOf(dummyMoviesCollection, dummyShowsCollection)

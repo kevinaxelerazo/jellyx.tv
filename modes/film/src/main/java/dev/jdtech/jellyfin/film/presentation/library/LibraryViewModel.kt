@@ -2,9 +2,11 @@ package dev.jdtech.jellyfin.film.presentation.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.jdtech.jellyfin.models.CollectionType
+import dev.jdtech.jellyfin.models.JellyxItem
 import dev.jdtech.jellyfin.models.SortBy
 import dev.jdtech.jellyfin.models.SortOrder
 import dev.jdtech.jellyfin.repository.JellyfinRepository
@@ -13,6 +15,7 @@ import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import org.jellyfin.sdk.model.api.BaseItemKind
 
@@ -58,23 +61,28 @@ constructor(
 
             try {
                 val items =
-                    jellyfinRepository
-                        .getItemsPaging(
-                            parentId = parentId,
-                            includeTypes = itemType,
-                            recursive = recursive,
-                            sortBy =
-                                if (
-                                    libraryType == CollectionType.TvShows &&
-                                        sortBy == SortBy.DATE_PLAYED
-                                )
-                                    SortBy.SERIES_DATE_PLAYED
-                                else sortBy, // Jellyfin uses a different enum for sorting series by
-                            // data played
-                            sortOrder = sortOrder,
-                        )
-                        .cachedIn(viewModelScope)
-                _state.emit(_state.value.copy(items = items))
+                    if (libraryType == CollectionType.LiveTv) {
+                        val channels: List<JellyxItem> = jellyfinRepository.getLiveTvChannels()
+                        flowOf(PagingData.from(channels))
+                    } else {
+                        jellyfinRepository
+                            .getItemsPaging(
+                                parentId = parentId,
+                                includeTypes = itemType,
+                                recursive = recursive,
+                                sortBy =
+                                    if (
+                                        libraryType == CollectionType.TvShows &&
+                                            sortBy == SortBy.DATE_PLAYED
+                                    )
+                                        SortBy.SERIES_DATE_PLAYED
+                                    else sortBy, // Jellyfin uses a different enum for sorting series by
+                                // data played
+                                sortOrder = sortOrder,
+                            )
+                            .cachedIn(viewModelScope)
+                    }
+                _state.emit(_state.value.copy(items = items, isLoading = false))
             } catch (e: Exception) {
                 _state.emit(_state.value.copy(error = e))
             }

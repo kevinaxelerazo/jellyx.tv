@@ -1,6 +1,6 @@
 package dev.jdtech.jellyfin.film.presentation.season
 
-import dev.jdtech.jellyfin.models.FindroidItem
+import dev.jdtech.jellyfin.models.JellyxItem
 import java.util.UUID
 
 sealed interface SeasonAction {
@@ -18,7 +18,7 @@ sealed interface SeasonAction {
 
     data object OnHomeClick : SeasonAction
 
-    data class NavigateToItem(val item: FindroidItem) : SeasonAction
+    data class NavigateToItem(val item: JellyxItem) : SeasonAction
 
     data class NavigateToSeries(val seriesId: UUID) : SeasonAction
 }

@@ -6,10 +6,14 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dev.jdtech.jellyfin.api.JellyfinApi
+import dev.jdtech.jellyfin.cache.MediaCacheEvictionBus
 import dev.jdtech.jellyfin.database.ServerDatabaseDao
 import dev.jdtech.jellyfin.repository.JellyfinRepository
 import dev.jdtech.jellyfin.repository.JellyfinRepositoryImpl
 import dev.jdtech.jellyfin.repository.JellyfinRepositoryOfflineImpl
+import dev.jdtech.jellyfin.repository.RatingsRepository
+import dev.jdtech.jellyfin.repository.RatingsRepositoryImpl
+import dev.jdtech.jellyfin.session.SessionEventManager
 import dev.jdtech.jellyfin.settings.domain.AppPreferences
 import javax.inject.Singleton
 
@@ -19,14 +23,27 @@ object RepositoryModule {
 
     @Singleton
     @Provides
+    fun provideMediaCacheEvictionBus(): MediaCacheEvictionBus {
+        return MediaCacheEvictionBus()
+    }
+
+    @Singleton
+    @Provides
     fun provideJellyfinRepositoryImpl(
         application: Application,
         jellyfinApi: JellyfinApi,
         serverDatabase: ServerDatabaseDao,
         appPreferences: AppPreferences,
+        cacheEvictionBus: MediaCacheEvictionBus,
     ): JellyfinRepositoryImpl {
         println("Creating new jellyfinRepositoryImpl")
-        return JellyfinRepositoryImpl(application, jellyfinApi, serverDatabase, appPreferences)
+        return JellyfinRepositoryImpl(
+            application,
+            jellyfinApi,
+            serverDatabase,
+            appPreferences,
+            cacheEvictionBus,
+        )
     }
 
     @Singleton
@@ -57,5 +74,17 @@ object RepositoryModule {
             true -> jellyfinRepositoryOfflineImpl
             false -> jellyfinRepositoryImpl
         }
+    }
+
+    @Singleton
+    @Provides
+    fun provideRatingsRepository(serverDatabase: ServerDatabaseDao): RatingsRepository {
+        return RatingsRepositoryImpl(database = serverDatabase)
+    }
+
+    @Singleton
+    @Provides
+    fun provideSessionEventManager(jellyfinApi: JellyfinApi): SessionEventManager {
+        return SessionEventManager(jellyfinApi)
     }
 }

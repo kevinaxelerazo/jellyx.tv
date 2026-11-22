@@ -6,9 +6,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.jdtech.jellyfin.core.Constants
 import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.models.CollectionSection
-import dev.jdtech.jellyfin.models.FindroidEpisode
-import dev.jdtech.jellyfin.models.FindroidMovie
-import dev.jdtech.jellyfin.models.FindroidShow
+import dev.jdtech.jellyfin.models.JellyxEpisode
+import dev.jdtech.jellyfin.models.JellyxMovie
+import dev.jdtech.jellyfin.models.JellyxShow
 import dev.jdtech.jellyfin.models.SortBy
 import dev.jdtech.jellyfin.models.UiText
 import dev.jdtech.jellyfin.repository.JellyfinRepository
@@ -39,7 +39,7 @@ class CollectionViewModel @Inject constructor(private val repository: JellyfinRe
                     CollectionSection(
                             Constants.FAVORITE_TYPE_MOVIES,
                             UiText.StringResource(CoreR.string.movies_label),
-                            items.filterIsInstance<FindroidMovie>(),
+                            items.filterIsInstance<JellyxMovie>(),
                         )
                         .let {
                             if (it.items.isNotEmpty()) {
@@ -49,7 +49,7 @@ class CollectionViewModel @Inject constructor(private val repository: JellyfinRe
                     CollectionSection(
                             Constants.FAVORITE_TYPE_SHOWS,
                             UiText.StringResource(CoreR.string.shows_label),
-                            items.filterIsInstance<FindroidShow>(),
+                            items.filterIsInstance<JellyxShow>(),
                         )
                         .let {
                             if (it.items.isNotEmpty()) {
@@ -59,7 +59,7 @@ class CollectionViewModel @Inject constructor(private val repository: JellyfinRe
                     CollectionSection(
                             Constants.FAVORITE_TYPE_EPISODES,
                             UiText.StringResource(CoreR.string.episodes_label),
-                            items.filterIsInstance<FindroidEpisode>(),
+                            items.filterIsInstance<JellyxEpisode>(),
                         )
                         .let {
                             if (it.items.isNotEmpty()) {

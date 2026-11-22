@@ -8,10 +8,10 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import dev.jdtech.jellyfin.api.JellyfinApi
 import dev.jdtech.jellyfin.database.ServerDatabaseDao
-import dev.jdtech.jellyfin.models.FindroidItem
+import dev.jdtech.jellyfin.models.JellyxItem
 import dev.jdtech.jellyfin.models.User
-import dev.jdtech.jellyfin.models.toFindroidEpisode
-import dev.jdtech.jellyfin.models.toFindroidMovie
+import dev.jdtech.jellyfin.models.toJellyxEpisode
+import dev.jdtech.jellyfin.models.toJellyxMovie
 import dev.jdtech.jellyfin.settings.domain.AppPreferences
 import org.jellyfin.sdk.model.api.UpdateUserItemDataDto
 
@@ -50,11 +50,11 @@ constructor(
                 }
                 val movies =
                     database.getMoviesByServerId(server.id).map {
-                        it.toFindroidMovie(database, user.id)
+                        it.toJellyxMovie(database, user.id)
                     }
                 val episodes =
                     database.getEpisodesByServerId(server.id).map {
-                        it.toFindroidEpisode(database, user.id)
+                        it.toJellyxEpisode(database, user.id)
                     }
 
                 syncUserData(jellyfinApi, user, movies)
@@ -68,7 +68,7 @@ constructor(
     private suspend fun syncUserData(
         jellyfinApi: JellyfinApi,
         user: User,
-        items: List<FindroidItem>,
+        items: List<JellyxItem>,
     ) {
         for (item in items) {
             val userData = database.getUserDataToBeSynced(user.id, item.id) ?: continue

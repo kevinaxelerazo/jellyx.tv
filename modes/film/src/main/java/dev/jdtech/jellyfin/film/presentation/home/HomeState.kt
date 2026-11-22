@@ -7,8 +7,10 @@ data class HomeState(
     val server: Server? = null,
     val suggestionsSection: HomeItem.Suggestions? = null,
     val resumeSection: HomeItem.Section? = null,
+    val favoritesSection: HomeItem.Section? = null,
     val nextUpSection: HomeItem.Section? = null,
     val views: List<HomeItem.ViewItem> = emptyList(),
+    val isOfflineDisplay: Boolean = false,
     val isLoading: Boolean = false,
     val error: Exception? = null,
 )

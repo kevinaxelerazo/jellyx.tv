@@ -1,11 +1,11 @@
 package dev.jdtech.jellyfin.film.presentation.library
 
-import dev.jdtech.jellyfin.models.FindroidItem
+import dev.jdtech.jellyfin.models.JellyxItem
 import dev.jdtech.jellyfin.models.SortBy
 import dev.jdtech.jellyfin.models.SortOrder
 
 sealed interface LibraryAction {
-    data class OnItemClick(val item: FindroidItem) : LibraryAction
+    data class OnItemClick(val item: JellyxItem) : LibraryAction
 
     data object OnBackClick : LibraryAction
 

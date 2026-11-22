@@ -6,7 +6,7 @@ import android.content.Intent
 import android.content.res.Resources
 import android.util.Base64
 import dev.jdtech.jellyfin.models.CollectionType
-import dev.jdtech.jellyfin.models.FindroidItem
+import dev.jdtech.jellyfin.models.JellyxItem
 import dev.jdtech.jellyfin.models.View
 import java.nio.charset.StandardCharsets
 import java.text.DateFormat
@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 import org.jellyfin.sdk.model.DateTime
 import org.jellyfin.sdk.model.api.BaseItemDto
 
-fun BaseItemDto.toView(items: List<FindroidItem>): View {
+fun BaseItemDto.toView(items: List<JellyxItem>): View {
     return View(
         id = id,
         name = name ?: "",

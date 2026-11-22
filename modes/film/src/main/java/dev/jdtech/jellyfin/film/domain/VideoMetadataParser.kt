@@ -3,7 +3,7 @@ package dev.jdtech.jellyfin.film.domain
 import dev.jdtech.jellyfin.models.AudioChannel
 import dev.jdtech.jellyfin.models.AudioCodec
 import dev.jdtech.jellyfin.models.DisplayProfile
-import dev.jdtech.jellyfin.models.FindroidSource
+import dev.jdtech.jellyfin.models.JellyxSource
 import dev.jdtech.jellyfin.models.Resolution
 import dev.jdtech.jellyfin.models.VideoCodec
 import dev.jdtech.jellyfin.models.VideoMetadata
@@ -13,7 +13,37 @@ import org.jellyfin.sdk.model.api.MediaStreamType
 import org.jellyfin.sdk.model.api.VideoRangeType
 
 object VideoMetadataParser {
-    suspend fun parse(source: FindroidSource): VideoMetadata {
+    suspend fun parse(sources: List<JellyxSource>): VideoMetadata {
+        if (sources.isEmpty()) {
+            return VideoMetadata(
+                size = 0L,
+                videoTracks = emptyList(),
+                audioTracks = emptyList(),
+                subtitleTracks = emptyList(),
+                resolution = emptyList(),
+                videoCodecs = emptyList(),
+                displayProfiles = emptyList(),
+                audioChannels = emptyList(),
+                audioCodecs = emptyList(),
+                isAtmos = emptyList(),
+            )
+        }
+        val parsed = sources.map { parse(it) }
+        return VideoMetadata(
+            size = parsed.first().size,
+            videoTracks = parsed.flatMap { it.videoTracks }.distinct(),
+            audioTracks = parsed.flatMap { it.audioTracks }.distinct(),
+            subtitleTracks = parsed.flatMap { it.subtitleTracks }.distinct(),
+            resolution = parsed.flatMap { it.resolution }.distinct(),
+            videoCodecs = parsed.flatMap { it.videoCodecs }.distinct(),
+            displayProfiles = parsed.flatMap { it.displayProfiles }.distinct(),
+            audioChannels = parsed.flatMap { it.audioChannels }.distinct(),
+            audioCodecs = parsed.flatMap { it.audioCodecs }.distinct(),
+            isAtmos = parsed.flatMap { it.isAtmos },
+        )
+    }
+
+    suspend fun parse(source: JellyxSource): VideoMetadata {
         val videoTracks = mutableListOf<String>()
         val audioTracks = mutableListOf<String>()
         val subtitleTracks = mutableListOf<String>()
@@ -94,16 +124,13 @@ object VideoMetadataParser {
                              * [org.jellyfin.sdk.model.api.MediaStream.width] as not null since we
                              * are inside [MediaStreamType.VIDEO] block
                              */
+                            val h = height ?: 0
+                            val w = width ?: 0
                             resolution.add(
                                 when {
-                                    height!! <= 1080 && width!! <= 1920 -> {
-                                        Resolution.HD
-                                    }
-
-                                    height!! <= 2160 && width!! <= 3840 -> {
-                                        Resolution.UHD
-                                    }
-
+                                    h >= 1440 || w >= 2560 -> Resolution.UHD
+                                    h >= 900 || w >= 1600 -> Resolution.FHD
+                                    h >= 600 || w >= 1100 -> Resolution.HD
                                     else -> Resolution.SD
                                 }
                             )

@@ -1,11 +1,11 @@
 package dev.jdtech.jellyfin.core.presentation.dummy
 
-import dev.jdtech.jellyfin.models.FindroidImages
-import dev.jdtech.jellyfin.models.FindroidSeason
+import dev.jdtech.jellyfin.models.JellyxImages
+import dev.jdtech.jellyfin.models.JellyxSeason
 import java.util.UUID
 
 val dummySeason =
-    FindroidSeason(
+    JellyxSeason(
         id = UUID.randomUUID(),
         name = "Season 1",
         seriesId = UUID.randomUUID(),
@@ -20,5 +20,5 @@ val dummySeason =
         canPlay = true,
         canDownload = false,
         unplayedItemCount = null,
-        images = FindroidImages(),
+        images = JellyxImages(),
     )

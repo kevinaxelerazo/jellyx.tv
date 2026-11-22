@@ -9,6 +9,7 @@ import dagger.hilt.components.SingletonComponent
 import dev.jdtech.jellyfin.database.ServerDatabaseDao
 import dev.jdtech.jellyfin.repository.JellyfinRepository
 import dev.jdtech.jellyfin.settings.domain.AppPreferences
+import dev.jdtech.jellyfin.utils.DownloadTransferRegistry
 import dev.jdtech.jellyfin.utils.Downloader
 import dev.jdtech.jellyfin.utils.DownloaderImpl
 import javax.inject.Singleton
@@ -24,6 +25,7 @@ object DownloaderModule {
         jellyfinRepository: JellyfinRepository,
         appPreferences: AppPreferences,
         workManager: WorkManager,
+        transferRegistry: DownloadTransferRegistry,
     ): Downloader {
         return DownloaderImpl(
             application,
@@ -31,6 +33,7 @@ object DownloaderModule {
             jellyfinRepository,
             appPreferences,
             workManager,
+            transferRegistry,
         )
     }
 }

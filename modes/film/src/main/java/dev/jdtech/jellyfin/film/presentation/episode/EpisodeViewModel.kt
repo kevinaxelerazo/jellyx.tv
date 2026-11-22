@@ -4,10 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.jdtech.jellyfin.film.domain.VideoMetadataParser
-import dev.jdtech.jellyfin.models.FindroidEpisode
-import dev.jdtech.jellyfin.models.FindroidItemPerson
+import dev.jdtech.jellyfin.models.JellyxEpisode
+import dev.jdtech.jellyfin.models.JellyxItemPerson
 import dev.jdtech.jellyfin.repository.JellyfinRepository
 import dev.jdtech.jellyfin.settings.domain.AppPreferences
+import dev.jdtech.jellyfin.utils.Downloader
 import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,7 @@ constructor(
     private val repository: JellyfinRepository,
     private val appPreferences: AppPreferences,
     private val videoMetadataParser: VideoMetadataParser,
+    private val downloader: Downloader,
 ) : ViewModel() {
     private val _state = MutableStateFlow(EpisodeState())
     val state = _state.asStateFlow()
@@ -34,8 +36,9 @@ constructor(
         this.episodeId = episodeId
         viewModelScope.launch {
             try {
+                runCatching { downloader.reconcileCompletedDownloads() }
                 val episode = repository.getEpisode(episodeId)
-                val videoMetadata = videoMetadataParser.parse(episode.sources.first())
+                val videoMetadata = videoMetadataParser.parse(episode.sources)
                 val actors = getActors(episode)
                 val displayExtraInfo = appPreferences.getValue(appPreferences.displayExtraInfo)
                 _state.emit(
@@ -52,7 +55,7 @@ constructor(
         }
     }
 
-    private suspend fun getActors(item: FindroidEpisode): List<FindroidItemPerson> {
+    private suspend fun getActors(item: JellyxEpisode): List<JellyxItemPerson> {
         return withContext(Dispatchers.Default) {
             item.people
                 .filter { it.type == PersonKind.ACTOR }
