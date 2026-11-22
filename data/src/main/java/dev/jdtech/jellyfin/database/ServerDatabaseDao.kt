@@ -6,15 +6,16 @@ import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.Transaction
 import androidx.room3.Update
-import dev.jdtech.jellyfin.models.FindroidEpisodeDto
-import dev.jdtech.jellyfin.models.FindroidMediaStreamDto
-import dev.jdtech.jellyfin.models.FindroidMovieDto
-import dev.jdtech.jellyfin.models.FindroidSeasonDto
-import dev.jdtech.jellyfin.models.FindroidSegmentDto
-import dev.jdtech.jellyfin.models.FindroidShowDto
-import dev.jdtech.jellyfin.models.FindroidSourceDto
-import dev.jdtech.jellyfin.models.FindroidTrickplayInfoDto
-import dev.jdtech.jellyfin.models.FindroidUserDataDto
+import dev.jdtech.jellyfin.models.JellyxEpisodeDto
+import dev.jdtech.jellyfin.models.JellyxMediaStreamDto
+import dev.jdtech.jellyfin.models.JellyxMovieDto
+import dev.jdtech.jellyfin.models.JellyxRatingsDto
+import dev.jdtech.jellyfin.models.JellyxSeasonDto
+import dev.jdtech.jellyfin.models.JellyxSegmentDto
+import dev.jdtech.jellyfin.models.JellyxShowDto
+import dev.jdtech.jellyfin.models.JellyxSourceDto
+import dev.jdtech.jellyfin.models.JellyxTrickplayInfoDto
+import dev.jdtech.jellyfin.models.JellyxUserDataDto
 import dev.jdtech.jellyfin.models.Server
 import dev.jdtech.jellyfin.models.ServerAddress
 import dev.jdtech.jellyfin.models.ServerWithAddressAndUser
@@ -91,18 +92,23 @@ interface ServerDatabaseDao {
     )
     suspend fun getServerCurrentAddress(serverId: String): ServerAddress?
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertMovie(movie: FindroidMovieDto)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertMovie(movie: JellyxMovieDto)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertSource(source: FindroidSourceDto)
+    suspend fun insertSource(source: JellyxSourceDto)
 
-    @Query("SELECT * FROM movies WHERE id = :id") suspend fun getMovie(id: UUID): FindroidMovieDto
+    @Query("SELECT * FROM movies WHERE id = :id") suspend fun getMovie(id: UUID): JellyxMovieDto
+
+    @Query("SELECT * FROM movies WHERE id = :id") suspend fun getMovieOrNull(id: UUID): JellyxMovieDto?
 
     @Query("SELECT * FROM sources WHERE itemId = :itemId")
-    suspend fun getSources(itemId: UUID): List<FindroidSourceDto>
+    suspend fun getSources(itemId: UUID): List<JellyxSourceDto>
+
+    @Query("SELECT * FROM sources WHERE path LIKE '%.download'")
+    suspend fun getPendingDownloadSources(): List<JellyxSourceDto>
 
     @Query("SELECT * FROM sources WHERE downloadId = :downloadId")
-    suspend fun getSourceByDownloadId(downloadId: Long): FindroidSourceDto?
+    suspend fun getSourceByDownloadId(downloadId: Long): JellyxSourceDto?
 
     @Query("UPDATE sources SET path = :path WHERE id = :id")
     suspend fun setSourcePath(id: String, path: String)
@@ -117,13 +123,22 @@ interface ServerDatabaseDao {
     suspend fun setPlaybackPositionTicks(itemId: UUID, userId: UUID, playbackPositionTicks: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertMediaStream(mediaStream: FindroidMediaStreamDto)
+    suspend fun insertMediaStream(mediaStream: JellyxMediaStreamDto)
+
+    @Query("SELECT * FROM ratings_cache WHERE itemId = :itemId")
+    suspend fun getRatings(itemId: UUID): JellyxRatingsDto?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRatings(ratings: JellyxRatingsDto)
 
     @Query("SELECT * FROM mediastreams WHERE sourceId = :sourceId")
-    suspend fun getMediaStreamsBySourceId(sourceId: String): List<FindroidMediaStreamDto>
+    suspend fun getMediaStreamsBySourceId(sourceId: String): List<JellyxMediaStreamDto>
 
     @Query("SELECT * FROM mediastreams WHERE downloadId = :downloadId")
-    suspend fun getMediaStreamByDownloadId(downloadId: Long): FindroidMediaStreamDto?
+    suspend fun getMediaStreamByDownloadId(downloadId: Long): JellyxMediaStreamDto?
+
+    @Query("SELECT * FROM mediastreams WHERE path LIKE '%.download'")
+    suspend fun getPendingDownloadMediaStreams(): List<JellyxMediaStreamDto>
 
     @Query("UPDATE mediastreams SET downloadId = :downloadId WHERE id = :id")
     suspend fun setMediaStreamDownloadId(id: UUID, downloadId: Long)
@@ -142,75 +157,83 @@ interface ServerDatabaseDao {
     @Query("UPDATE userdata SET favorite = :favorite WHERE userId = :userId AND itemId = :itemId")
     suspend fun setFavorite(userId: UUID, itemId: UUID, favorite: Boolean)
 
-    @Query("SELECT * FROM movies ORDER BY name ASC") suspend fun getMovies(): List<FindroidMovieDto>
+    @Query("SELECT * FROM movies ORDER BY name ASC") suspend fun getMovies(): List<JellyxMovieDto>
 
     @Query("SELECT * FROM movies WHERE serverId = :serverId ORDER BY name ASC")
-    suspend fun getMoviesByServerId(serverId: String): List<FindroidMovieDto>
+    suspend fun getMoviesByServerId(serverId: String): List<JellyxMovieDto>
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertShow(show: FindroidShowDto)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertShow(show: JellyxShowDto)
 
-    @Query("SELECT * FROM shows WHERE id = :id") suspend fun getShow(id: UUID): FindroidShowDto
+    @Query("SELECT * FROM shows WHERE id = :id") suspend fun getShow(id: UUID): JellyxShowDto
 
-    @Query("SELECT * FROM shows ORDER BY name ASC") suspend fun getShows(): List<FindroidShowDto>
+    @Query("SELECT * FROM shows WHERE id = :id") suspend fun getShowOrNull(id: UUID): JellyxShowDto?
+
+    @Query("SELECT * FROM shows ORDER BY name ASC") suspend fun getShows(): List<JellyxShowDto>
 
     @Query("SELECT * FROM shows WHERE serverId = :serverId ORDER BY name ASC")
-    suspend fun getShowsByServerId(serverId: String): List<FindroidShowDto>
+    suspend fun getShowsByServerId(serverId: String): List<JellyxShowDto>
 
     @Query("DELETE FROM shows WHERE id = :id") suspend fun deleteShow(id: UUID)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertSeason(show: FindroidSeasonDto)
+    suspend fun insertSeason(show: JellyxSeasonDto)
 
     @Query("SELECT * FROM seasons WHERE id = :id")
-    suspend fun getSeason(id: UUID): FindroidSeasonDto
+    suspend fun getSeason(id: UUID): JellyxSeasonDto
+
+    @Query("SELECT * FROM seasons WHERE id = :id")
+    suspend fun getSeasonOrNull(id: UUID): JellyxSeasonDto?
 
     @Query("SELECT * FROM seasons WHERE seriesId = :seriesId ORDER BY indexNumber ASC")
-    suspend fun getSeasonsByShowId(seriesId: UUID): List<FindroidSeasonDto>
+    suspend fun getSeasonsByShowId(seriesId: UUID): List<JellyxSeasonDto>
 
     @Query("DELETE FROM seasons WHERE id = :id") suspend fun deleteSeason(id: UUID)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertEpisode(episode: FindroidEpisodeDto)
+    suspend fun insertEpisode(episode: JellyxEpisodeDto)
 
     @Query("SELECT * FROM episodes WHERE id = :id")
-    suspend fun getEpisode(id: UUID): FindroidEpisodeDto
+    suspend fun getEpisode(id: UUID): JellyxEpisodeDto
+
+    @Query("SELECT * FROM episodes WHERE id = :id")
+    suspend fun getEpisodeOrNull(id: UUID): JellyxEpisodeDto?
 
     @Query(
         "SELECT * FROM episodes WHERE seriesId = :seriesId ORDER BY parentIndexNumber ASC, indexNumber ASC"
     )
-    suspend fun getEpisodesByShowId(seriesId: UUID): List<FindroidEpisodeDto>
+    suspend fun getEpisodesByShowId(seriesId: UUID): List<JellyxEpisodeDto>
 
     @Query("SELECT * FROM episodes WHERE seasonId = :seasonId ORDER BY indexNumber ASC")
-    suspend fun getEpisodesBySeasonId(seasonId: UUID): List<FindroidEpisodeDto>
+    suspend fun getEpisodesBySeasonId(seasonId: UUID): List<JellyxEpisodeDto>
 
     @Query(
         "SELECT * FROM episodes WHERE serverId = :serverId ORDER BY seriesName ASC, parentIndexNumber ASC, indexNumber ASC"
     )
-    suspend fun getEpisodesByServerId(serverId: String): List<FindroidEpisodeDto>
+    suspend fun getEpisodesByServerId(serverId: String): List<JellyxEpisodeDto>
 
     @Query("DELETE FROM episodes WHERE id = :id") suspend fun deleteEpisode(id: UUID)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertSegment(segment: FindroidSegmentDto)
+    suspend fun insertSegment(segment: JellyxSegmentDto)
 
     @Query("SELECT * FROM segments WHERE itemId = :itemId")
-    suspend fun getSegments(itemId: UUID): List<FindroidSegmentDto>
+    suspend fun getSegments(itemId: UUID): List<JellyxSegmentDto>
 
-    @Query("SELECT * FROM seasons") suspend fun getSeasons(): List<FindroidSeasonDto>
+    @Query("SELECT * FROM seasons") suspend fun getSeasons(): List<JellyxSeasonDto>
 
-    @Query("SELECT * FROM episodes") suspend fun getEpisodes(): List<FindroidEpisodeDto>
+    @Query("SELECT * FROM episodes") suspend fun getEpisodes(): List<JellyxEpisodeDto>
 
     @Query("SELECT * FROM userdata WHERE itemId = :itemId AND userId = :userId")
-    suspend fun getUserData(itemId: UUID, userId: UUID): FindroidUserDataDto?
+    suspend fun getUserData(itemId: UUID, userId: UUID): JellyxUserDataDto?
 
     @Transaction
-    suspend fun getUserDataOrCreateNew(itemId: UUID, userId: UUID): FindroidUserDataDto {
+    suspend fun getUserDataOrCreateNew(itemId: UUID, userId: UUID): JellyxUserDataDto {
         var userData = getUserData(itemId, userId)
 
         // Create user data when there is none
         if (userData == null) {
             userData =
-                FindroidUserDataDto(
+                JellyxUserDataDto(
                     userId = userId,
                     itemId = itemId,
                     played = false,
@@ -224,12 +247,12 @@ interface ServerDatabaseDao {
     }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertUserData(userData: FindroidUserDataDto)
+    suspend fun insertUserData(userData: JellyxUserDataDto)
 
     @Query("DELETE FROM userdata WHERE itemId = :itemId") suspend fun deleteUserData(itemId: UUID)
 
     @Query("SELECT * FROM userdata WHERE userId = :userId AND itemId = :itemId AND toBeSynced = 1")
-    suspend fun getUserDataToBeSynced(userId: UUID, itemId: UUID): FindroidUserDataDto?
+    suspend fun getUserDataToBeSynced(userId: UUID, itemId: UUID): JellyxUserDataDto?
 
     @Query(
         "UPDATE userdata SET toBeSynced = :toBeSynced WHERE itemId = :itemId AND userId = :userId"
@@ -237,17 +260,17 @@ interface ServerDatabaseDao {
     suspend fun setUserDataToBeSynced(userId: UUID, itemId: UUID, toBeSynced: Boolean)
 
     @Query("SELECT * FROM movies WHERE serverId = :serverId AND name LIKE '%' || :name || '%'")
-    suspend fun searchMovies(serverId: String, name: String): List<FindroidMovieDto>
+    suspend fun searchMovies(serverId: String, name: String): List<JellyxMovieDto>
 
     @Query("SELECT * FROM shows WHERE serverId = :serverId AND name LIKE '%' || :name || '%'")
-    suspend fun searchShows(serverId: String, name: String): List<FindroidShowDto>
+    suspend fun searchShows(serverId: String, name: String): List<JellyxShowDto>
 
     @Query("SELECT * FROM episodes WHERE serverId = :serverId AND name LIKE '%' || :name || '%'")
-    suspend fun searchEpisodes(serverId: String, name: String): List<FindroidEpisodeDto>
+    suspend fun searchEpisodes(serverId: String, name: String): List<JellyxEpisodeDto>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertTrickplayInfo(trickplayInfoDto: FindroidTrickplayInfoDto)
+    suspend fun insertTrickplayInfo(trickplayInfoDto: JellyxTrickplayInfoDto)
 
     @Query("SELECT * FROM trickplayInfos WHERE sourceId = :sourceId")
-    suspend fun getTrickplayInfo(sourceId: String): FindroidTrickplayInfoDto?
+    suspend fun getTrickplayInfo(sourceId: String): JellyxTrickplayInfoDto?
 }

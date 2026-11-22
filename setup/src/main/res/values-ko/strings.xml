@@ -32,10 +32,10 @@
     <string name="cancel">취소</string>
     <string name="servers">서버</string>
     <string name="servers_btn_add_server">서버 추가</string>
-    <string name="welcome">Findroid에 오신 것을 환영합니다</string>
+    <string name="welcome">Jellyx.tv에 오신 것을 환영합니다</string>
     <string name="welcome_btn_continue">계속</string>
     <string name="welcome_btn_learn_more">Jellyfin 자세히 알아보기</string>
-    <string name="welcome_text">Findroid는 Jellyfin용 서드파티 클라이언트입니다. Findroid 자체에는 미디어가 포함되어 있지 않습니다.\n\n이 클라이언트를 사용하려면 직접 Jellyfin 서버를 운영해야 합니다.</string>
+    <string name="welcome_text">Jellyx.tv는 Jellyfin용 서드파티 클라이언트입니다. Jellyx.tv 자체에는 미디어가 포함되어 있지 않습니다.\n\n이 클라이언트를 사용하려면 직접 Jellyfin 서버를 운영해야 합니다.</string>
     <string name="permission_btn_grant">허용</string>
     <string name="permission_btn_not_now">나중에</string>
     <string name="permission_btn_open_settings">설정 열기</string>

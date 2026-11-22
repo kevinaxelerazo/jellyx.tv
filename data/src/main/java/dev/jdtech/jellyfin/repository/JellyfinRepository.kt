@@ -1,15 +1,16 @@
 package dev.jdtech.jellyfin.repository
 
 import androidx.paging.PagingData
-import dev.jdtech.jellyfin.models.FindroidCollection
-import dev.jdtech.jellyfin.models.FindroidEpisode
-import dev.jdtech.jellyfin.models.FindroidItem
-import dev.jdtech.jellyfin.models.FindroidMovie
-import dev.jdtech.jellyfin.models.FindroidPerson
-import dev.jdtech.jellyfin.models.FindroidSeason
-import dev.jdtech.jellyfin.models.FindroidSegment
-import dev.jdtech.jellyfin.models.FindroidShow
-import dev.jdtech.jellyfin.models.FindroidSource
+import dev.jdtech.jellyfin.models.JellyxChannel
+import dev.jdtech.jellyfin.models.JellyxCollection
+import dev.jdtech.jellyfin.models.JellyxEpisode
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.models.JellyxMovie
+import dev.jdtech.jellyfin.models.JellyxPerson
+import dev.jdtech.jellyfin.models.JellyxSeason
+import dev.jdtech.jellyfin.models.JellyxSegment
+import dev.jdtech.jellyfin.models.JellyxShow
+import dev.jdtech.jellyfin.models.JellyxSource
 import dev.jdtech.jellyfin.models.SortBy
 import dev.jdtech.jellyfin.models.SortOrder
 import java.util.UUID
@@ -25,17 +26,17 @@ interface JellyfinRepository {
 
     suspend fun getUserViews(): List<BaseItemDto>
 
-    suspend fun getEpisode(itemId: UUID): FindroidEpisode
+    suspend fun getEpisode(itemId: UUID): JellyxEpisode
 
-    suspend fun getMovie(itemId: UUID): FindroidMovie
+    suspend fun getMovie(itemId: UUID): JellyxMovie
 
-    suspend fun getShow(itemId: UUID): FindroidShow
+    suspend fun getShow(itemId: UUID): JellyxShow
 
-    suspend fun getSeason(itemId: UUID): FindroidSeason
+    suspend fun getSeason(itemId: UUID): JellyxSeason
 
-    suspend fun getLibraries(): List<FindroidCollection>
+    suspend fun getLibraries(): List<JellyxCollection>
 
-    suspend fun getItem(itemId: UUID): FindroidItem?
+    suspend fun getItem(itemId: UUID): JellyxItem?
 
     suspend fun getItems(
         parentId: UUID? = null,
@@ -45,7 +46,7 @@ interface JellyfinRepository {
         sortOrder: SortOrder = SortOrder.ASCENDING,
         startIndex: Int? = null,
         limit: Int? = null,
-    ): List<FindroidItem>
+    ): List<JellyxItem>
 
     suspend fun getItemsPaging(
         parentId: UUID? = null,
@@ -53,29 +54,35 @@ interface JellyfinRepository {
         recursive: Boolean = false,
         sortBy: SortBy = SortBy.defaultValue,
         sortOrder: SortOrder = SortOrder.ASCENDING,
-    ): Flow<PagingData<FindroidItem>>
+    ): Flow<PagingData<JellyxItem>>
 
-    suspend fun getPerson(personId: UUID): FindroidPerson
+    suspend fun getPerson(personId: UUID): JellyxPerson
 
     suspend fun getPersonItems(
         personIds: List<UUID>,
         includeTypes: List<BaseItemKind>? = null,
         recursive: Boolean = true,
-    ): List<FindroidItem>
+    ): List<JellyxItem>
 
-    suspend fun getFavoriteItems(): List<FindroidItem>
+    suspend fun getFavoriteItems(): List<JellyxItem>
 
-    suspend fun getSearchItems(query: String): List<FindroidItem>
+    suspend fun getSearchItems(query: String): List<JellyxItem>
 
-    suspend fun getSuggestions(): List<FindroidItem>
+    suspend fun getSuggestions(): List<JellyxItem>
 
-    suspend fun getResumeItems(): List<FindroidItem>
+    suspend fun getSimilarItems(itemId: UUID, limit: Int = 4): List<JellyxItem>
 
-    suspend fun getLatestMedia(parentId: UUID): List<FindroidItem>
+    suspend fun getGenres(): List<String>
 
-    suspend fun getSeasons(seriesId: UUID, offline: Boolean = false): List<FindroidSeason>
+    suspend fun getItemsByGenre(genre: String): List<JellyxItem>
 
-    suspend fun getNextUp(seriesId: UUID? = null): List<FindroidEpisode>
+    suspend fun getResumeItems(): List<JellyxItem>
+
+    suspend fun getLatestMedia(parentId: UUID): List<JellyxItem>
+
+    suspend fun getSeasons(seriesId: UUID, offline: Boolean = false): List<JellyxSeason>
+
+    suspend fun getNextUp(seriesId: UUID? = null): List<JellyxEpisode>
 
     suspend fun getEpisodes(
         seriesId: UUID,
@@ -84,13 +91,15 @@ interface JellyfinRepository {
         startItemId: UUID? = null,
         limit: Int? = null,
         offline: Boolean = false,
-    ): List<FindroidEpisode>
+    ): List<JellyxEpisode>
 
-    suspend fun getMediaSources(itemId: UUID, includePath: Boolean = false): List<FindroidSource>
+    suspend fun getMediaSources(itemId: UUID, includePath: Boolean = false): List<JellyxSource>
+
+    suspend fun closeLiveStream(liveStreamId: String)
 
     suspend fun getStreamUrl(itemId: UUID, mediaSourceId: String): String
 
-    suspend fun getSegments(itemId: UUID): List<FindroidSegment>
+    suspend fun getSegments(itemId: UUID): List<JellyxSegment>
 
     suspend fun getTrickplayData(itemId: UUID, width: Int, index: Int): ByteArray?
 
@@ -112,11 +121,37 @@ interface JellyfinRepository {
 
     fun getBaseUrl(): String
 
+    fun getAccessToken(): String? = null
+
     suspend fun updateDeviceName(name: String)
 
     suspend fun getUserConfiguration(): UserConfiguration?
 
-    suspend fun getDownloads(): List<FindroidItem>
+    suspend fun getDownloads(): List<JellyxItem>
+
+    suspend fun getLiveTvChannels(): List<JellyxChannel>
+
+    suspend fun getLiveTvChannel(channelId: UUID): JellyxChannel
+
+    suspend fun getSyncPlayGroups(): List<SyncPlayGroupInfo>
+
+    suspend fun createSyncPlayGroup(groupName: String): Boolean
+
+    suspend fun joinSyncPlayGroup(groupId: UUID): Boolean
+
+    suspend fun leaveSyncPlayGroup(): Boolean
+
+    suspend fun sendSyncPlayPause()
+
+    suspend fun sendSyncPlayUnpause()
+
+    suspend fun sendSyncPlaySeek(positionMs: Long)
 
     fun getUserId(): UUID
 }
+
+data class SyncPlayGroupInfo(
+    val groupId: UUID,
+    val groupName: String,
+    val participants: List<String>,
+)

@@ -10,12 +10,15 @@ import org.jellyfin.sdk.api.client.HttpClientOptions
 import org.jellyfin.sdk.api.client.extensions.authenticationApi
 import org.jellyfin.sdk.api.client.extensions.brandingApi
 import org.jellyfin.sdk.api.client.extensions.deviceApi
+import org.jellyfin.sdk.api.client.extensions.genreApi
 import org.jellyfin.sdk.api.client.extensions.libraryApi
+import org.jellyfin.sdk.api.client.extensions.liveTvApi
 import org.jellyfin.sdk.api.client.extensions.mediaInfoApi
 import org.jellyfin.sdk.api.client.extensions.mediaSegmentApi
 import org.jellyfin.sdk.api.client.extensions.sessionApi
 import org.jellyfin.sdk.api.client.extensions.showApi
 import org.jellyfin.sdk.api.client.extensions.suggestionApi
+import org.jellyfin.sdk.api.client.extensions.syncPlayApi
 import org.jellyfin.sdk.api.client.extensions.systemApi
 import org.jellyfin.sdk.api.client.extensions.trickPlayApi
 import org.jellyfin.sdk.api.client.extensions.userApi
@@ -63,12 +66,15 @@ class JellyfinApi(
     val brandingApi = api.brandingApi
     val authenticationApi = api.authenticationApi
     val deviceApi = api.deviceApi
+    val genreApi = api.genreApi
     val libraryApi = api.libraryApi
+    val liveTvApi = api.liveTvApi
     val mediaInfoApi = api.mediaInfoApi
     val mediaSegmentApi = api.mediaSegmentApi
     val sessionApi = api.sessionApi
     val showApi = api.showApi
     val suggestionApi = api.suggestionApi
+    val syncPlayApi = api.syncPlayApi
     val systemApi = api.systemApi
     val trickPlayApi = api.trickPlayApi
     val userApi = api.userApi

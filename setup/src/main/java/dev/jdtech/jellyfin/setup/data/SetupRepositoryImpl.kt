@@ -2,6 +2,7 @@ package dev.jdtech.jellyfin.setup.data
 
 import dev.jdtech.jellyfin.api.JellyfinApi
 import dev.jdtech.jellyfin.core.R as CoreR
+import dev.jdtech.jellyfin.data.BuildConfig
 import dev.jdtech.jellyfin.database.ServerDatabaseDao
 import dev.jdtech.jellyfin.models.ExceptionUiText
 import dev.jdtech.jellyfin.models.ExceptionUiTexts
@@ -14,8 +15,11 @@ import dev.jdtech.jellyfin.settings.domain.AppPreferences
 import dev.jdtech.jellyfin.setup.R as SetupR
 import dev.jdtech.jellyfin.setup.domain.SetupRepository
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.discovery.RecommendedServerInfo
 import org.jellyfin.sdk.discovery.RecommendedServerInfoScore
@@ -108,6 +112,14 @@ class SetupRepositoryImpl(
             }
             okServers.isNotEmpty() -> {
                 val okServer = okServers.first()
+                val hasFatalIssue =
+                    okServer.issues.any {
+                        it is RecommendedServerIssue.InvalidProductName ||
+                            it is RecommendedServerIssue.UnsupportedServerVersion
+                    }
+                if (!hasFatalIssue && okServer.systemInfo.getOrNull()?.id != null) {
+                    return saveServerInDatabase(okServer)
+                }
                 throw ExceptionUiTexts(createIssuesString(okServer))
             }
             else -> {
@@ -116,6 +128,112 @@ class SetupRepositoryImpl(
                 )
             }
         }
+    }
+
+    override suspend fun seedDefaultServer(): Boolean =
+        seedDefaultServer(listOf(BuildConfig.DEFAULT_SERVER_URL, BuildConfig.FALLBACK_SERVER_URL))
+
+    internal suspend fun seedDefaultServer(
+        rawUrls: List<String>,
+        defaultServerName: String = BuildConfig.DEFAULT_SERVER_NAME.ifBlank { "Jellyx.tv" },
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            seedMutex.withLock {
+                if (appPreferences.getValue(appPreferences.defaultServerSeeded)) {
+                    return@withLock false
+                }
+
+                val urls = rawUrls.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+                if (urls.isEmpty()) {
+                    return@withLock false
+                }
+
+                if (database.getServersCount() > 0) {
+                    appPreferences.setValue(appPreferences.defaultServerSeeded, true)
+                    appPreferences.setValue(appPreferences.localNetworkPermissionDecided, true)
+                    return@withLock false
+                }
+
+                var server: Server? = null
+                for (url in urls) {
+                    try {
+                        server = addServer(url)
+                        break
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.w(
+                            "Default server discovery attempt failed (%s)",
+                            e::class.simpleName,
+                        )
+                    }
+                }
+
+                val seededServer =
+                    server
+                        ?: createOfflineSeededServer(
+                            primaryUrl = urls.first(),
+                            serverName = defaultServerName,
+                        )
+
+                val existingAddresses =
+                    database
+                        .getServerWithAddresses(seededServer.id)
+                        ?.addresses
+                        .orEmpty()
+                        .map { it.address.trimEnd('/') }
+                        .toSet()
+                for (url in urls) {
+                    if (url.trimEnd('/') !in existingAddresses) {
+                        database.insertServerAddress(
+                            ServerAddress(
+                                id = UUID.randomUUID(),
+                                serverId = seededServer.id,
+                                address = url,
+                            )
+                        )
+                    }
+                }
+
+                setCurrentServer(seededServer.id)
+                appPreferences.setValue(appPreferences.currentServer, seededServer.id)
+                appPreferences.setValue(appPreferences.defaultServerSeeded, true)
+                appPreferences.setValue(appPreferences.localNetworkPermissionDecided, true)
+                true
+            }
+        }
+
+    private suspend fun createOfflineSeededServer(
+        primaryUrl: String,
+        serverName: String,
+    ): Server {
+        val fallbackId =
+            UUID.nameUUIDFromBytes("jellyx-seed:${primaryUrl.trimEnd('/')}".toByteArray())
+                .toString()
+        val addressId = UUID.randomUUID()
+        val serverAddress =
+            ServerAddress(
+                id = addressId,
+                serverId = fallbackId,
+                address = primaryUrl,
+            )
+        val server =
+            Server(
+                id = fallbackId,
+                name = serverName,
+                currentServerAddressId = addressId,
+                currentUserId = null,
+            )
+        database.insertServer(server)
+        database.insertServerAddress(serverAddress)
+        jellyfinApi.apply {
+            api.update(baseUrl = primaryUrl, accessToken = null)
+        }
+        return server
+    }
+
+    companion object {
+        private val seedMutex = Mutex()
     }
 
     private suspend fun saveServerInDatabase(recommendedServerInfo: RecommendedServerInfo): Server {
@@ -233,16 +351,57 @@ class SetupRepositoryImpl(
     }
 
     private suspend fun saveAuthenticationResult(authenticationResult: AuthenticationResult) {
+        val realServerId = authenticationResult.serverId!!
+        if (database.getServer(realServerId) == null) {
+            val currentServerId = appPreferences.getValue(appPreferences.currentServer)
+            val fallbackServer =
+                currentServerId?.let { database.getServer(it) }
+                    ?: database.getServers().firstOrNull()
+            val fallbackAddresses =
+                fallbackServer?.let { database.getServerWithAddresses(it.id).addresses }.orEmpty()
+            val primaryAddressId = fallbackAddresses.firstOrNull()?.id ?: UUID.randomUUID()
+            val reconciledServer =
+                Server(
+                    id = realServerId,
+                    name =
+                        fallbackServer?.name
+                            ?: BuildConfig.DEFAULT_SERVER_NAME.ifBlank { "Jellyx.tv" },
+                    currentServerAddressId = primaryAddressId,
+                    currentUserId = authenticationResult.user!!.id,
+                )
+            database.insertServer(reconciledServer)
+            if (fallbackAddresses.isNotEmpty()) {
+                for (addr in fallbackAddresses) {
+                    database.insertServerAddress(addr.copy(serverId = realServerId))
+                }
+            } else {
+                val baseUrl = jellyfinApi.api.baseUrl.orEmpty()
+                if (baseUrl.isNotBlank()) {
+                    database.insertServerAddress(
+                        ServerAddress(
+                            id = primaryAddressId,
+                            serverId = realServerId,
+                            address = baseUrl,
+                        )
+                    )
+                }
+            }
+            if (fallbackServer != null && fallbackServer.id != realServerId) {
+                database.deleteServer(fallbackServer.id)
+            }
+            appPreferences.setValue(appPreferences.currentServer, realServerId)
+        }
+
         val user =
             User(
                 id = authenticationResult.user!!.id,
                 name = authenticationResult.user!!.name!!,
-                serverId = authenticationResult.serverId!!,
+                serverId = realServerId,
                 accessToken = authenticationResult.accessToken!!,
             )
 
         database.insertUser(user)
-        database.updateServerCurrentUser(authenticationResult.serverId!!, user.id)
+        database.updateServerCurrentUser(realServerId, user.id)
 
         jellyfinApi.apply {
             api.update(accessToken = authenticationResult.accessToken)

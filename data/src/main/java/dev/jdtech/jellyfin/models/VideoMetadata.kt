@@ -16,6 +16,7 @@ data class VideoMetadata(
 enum class Resolution(val raw: String) {
     SD("SD"),
     HD("HD"),
+    FHD("FHD"),
     UHD("4K"),
 }
 

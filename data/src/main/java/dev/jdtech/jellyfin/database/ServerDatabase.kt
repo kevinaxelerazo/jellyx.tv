@@ -9,15 +9,16 @@ import androidx.room3.migration.AutoMigrationSpec
 import androidx.room3.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
-import dev.jdtech.jellyfin.models.FindroidEpisodeDto
-import dev.jdtech.jellyfin.models.FindroidMediaStreamDto
-import dev.jdtech.jellyfin.models.FindroidMovieDto
-import dev.jdtech.jellyfin.models.FindroidSeasonDto
-import dev.jdtech.jellyfin.models.FindroidSegmentDto
-import dev.jdtech.jellyfin.models.FindroidShowDto
-import dev.jdtech.jellyfin.models.FindroidSourceDto
-import dev.jdtech.jellyfin.models.FindroidTrickplayInfoDto
-import dev.jdtech.jellyfin.models.FindroidUserDataDto
+import dev.jdtech.jellyfin.models.JellyxEpisodeDto
+import dev.jdtech.jellyfin.models.JellyxMediaStreamDto
+import dev.jdtech.jellyfin.models.JellyxMovieDto
+import dev.jdtech.jellyfin.models.JellyxRatingsDto
+import dev.jdtech.jellyfin.models.JellyxSeasonDto
+import dev.jdtech.jellyfin.models.JellyxSegmentDto
+import dev.jdtech.jellyfin.models.JellyxShowDto
+import dev.jdtech.jellyfin.models.JellyxSourceDto
+import dev.jdtech.jellyfin.models.JellyxTrickplayInfoDto
+import dev.jdtech.jellyfin.models.JellyxUserDataDto
 import dev.jdtech.jellyfin.models.Server
 import dev.jdtech.jellyfin.models.ServerAddress
 import dev.jdtech.jellyfin.models.User
@@ -28,17 +29,18 @@ import dev.jdtech.jellyfin.models.User
             Server::class,
             ServerAddress::class,
             User::class,
-            FindroidMovieDto::class,
-            FindroidShowDto::class,
-            FindroidSeasonDto::class,
-            FindroidEpisodeDto::class,
-            FindroidSourceDto::class,
-            FindroidMediaStreamDto::class,
-            FindroidUserDataDto::class,
-            FindroidTrickplayInfoDto::class,
-            FindroidSegmentDto::class,
+            JellyxMovieDto::class,
+            JellyxShowDto::class,
+            JellyxSeasonDto::class,
+            JellyxEpisodeDto::class,
+            JellyxSourceDto::class,
+            JellyxMediaStreamDto::class,
+            JellyxUserDataDto::class,
+            JellyxTrickplayInfoDto::class,
+            JellyxSegmentDto::class,
+            JellyxRatingsDto::class,
         ],
-    version = 8,
+    version = 9,
     autoMigrations =
         [
             AutoMigration(from = 2, to = 3),
@@ -46,6 +48,7 @@ import dev.jdtech.jellyfin.models.User
             AutoMigration(from = 4, to = 5, spec = ServerDatabase.TrickplayMigration::class),
             AutoMigration(from = 5, to = 6, spec = ServerDatabase.IntrosMigration::class),
             AutoMigration(from = 7, to = 8),
+            AutoMigration(from = 8, to = 9),
         ],
 )
 @ColumnTypeConverters(Converters::class)

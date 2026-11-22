@@ -27,6 +27,8 @@ interface SetupRepository {
 
     suspend fun addServer(address: String): Server
 
+    suspend fun seedDefaultServer(): Boolean
+
     suspend fun loadDisclaimer(): String?
 
     suspend fun login(username: String, password: String)
