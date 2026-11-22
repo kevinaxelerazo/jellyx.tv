@@ -25,7 +25,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyServer
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
 @Composable
@@ -69,5 +69,5 @@ fun DiscoveredServerItem(name: String, modifier: Modifier = Modifier, onClick: (
 @Composable
 @Preview
 private fun DiscoveredServerItemPreview() {
-    FindroidTheme { DiscoveredServerItem(dummyServer.name) }
+    JellyxTheme { DiscoveredServerItem(dummyServer.name) }
 }

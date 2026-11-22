@@ -26,10 +26,16 @@ fun HomeView(
     itemsPadding: PaddingValues,
     onAction: (HomeAction) -> Unit,
     modifier: Modifier = Modifier,
+    isOfflineSection: Boolean = false,
 ) {
     Column(modifier = modifier) {
         Text(
-            text = stringResource(id = FilmR.string.latest_library, view.view.name),
+            text =
+                if (isOfflineSection) {
+                    view.view.name
+                } else {
+                    stringResource(id = FilmR.string.latest_library, view.view.name)
+                },
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(itemsPadding),
         )

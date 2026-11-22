@@ -20,7 +20,7 @@ import androidx.tv.material3.IconButton
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import dev.jdtech.jellyfin.core.R as CoreR
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import kotlin.time.Duration
 
@@ -96,7 +96,7 @@ fun VideoPlayerSeeker(
 @Preview
 @Composable
 private fun VideoPlayerSeekerPreview() {
-    FindroidTheme {
+    JellyxTheme {
         VideoPlayerSeeker(
             focusRequester = FocusRequester(),
             state = rememberVideoPlayerState(),

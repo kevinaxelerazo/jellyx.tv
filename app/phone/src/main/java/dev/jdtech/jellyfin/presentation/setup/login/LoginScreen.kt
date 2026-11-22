@@ -12,14 +12,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -47,9 +45,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jdtech.jellyfin.core.R as CoreR
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
 import dev.jdtech.jellyfin.presentation.setup.components.LoadingButton
 import dev.jdtech.jellyfin.presentation.setup.components.RootLayout
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.setup.R as SetupR
 import dev.jdtech.jellyfin.setup.presentation.login.LoginAction
 import dev.jdtech.jellyfin.setup.presentation.login.LoginEvent
@@ -218,12 +217,9 @@ private fun LoginScreenLayout(
                     Spacer(modifier = Modifier.height(8.dp))
                     Box {
                         if (state.quickConnectCode != null) {
-                            CircularProgressIndicator(
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier =
-                                    Modifier.size(24.dp)
-                                        .align(Alignment.CenterStart)
-                                        .offset(x = 8.dp),
+                            JellyxLoadingLogo(
+                                size = 22.dp,
+                                modifier = Modifier.align(Alignment.CenterStart).offset(x = 8.dp),
                             )
                         }
                         OutlinedButton(
@@ -262,7 +258,7 @@ private fun LoginScreenLayout(
 @PreviewScreenSizes
 @Composable
 private fun AddServerScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         LoginScreenLayout(
             state =
                 LoginState(

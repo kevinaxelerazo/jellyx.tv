@@ -1,6 +1,7 @@
 package dev.jdtech.jellyfin
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -13,7 +14,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import dev.jdtech.jellyfin.models.FindroidSeason
+import dev.jdtech.jellyfin.models.JellyxSeason
 import dev.jdtech.jellyfin.navigation.navigateOrReuse
 import dev.jdtech.jellyfin.navigation.resumedAction
 import dev.jdtech.jellyfin.presentation.film.LibraryScreen
@@ -40,6 +41,8 @@ fun NavigationRoot(
     hasServers: Boolean,
     hasCurrentServer: Boolean,
     hasCurrentUser: Boolean,
+    pendingDeepLinkRoute: NavKey? = null,
+    onDeepLinkConsumed: () -> Unit = {},
 ) {
     val setupComplete = hasServers && hasCurrentServer && hasCurrentUser
 
@@ -79,6 +82,13 @@ fun NavigationRoot(
     }
     val navigateOrReuse: (NavKey) -> Unit = backStack::navigateOrReuse
     val goBack: () -> Unit = { backStack.removeLastOrNull() }
+
+    LaunchedEffect(setupComplete, pendingDeepLinkRoute) {
+        if (setupComplete && pendingDeepLinkRoute != null) {
+            navigateOrReuse(pendingDeepLinkRoute)
+            onDeepLinkConsumed()
+        }
+    }
 
     // The activity-scoped permission ViewModel is shared by the interstitial and the setup screen.
     val permissionViewModel: PermissionViewModel = hiltViewModel()
@@ -225,6 +235,12 @@ private fun EntryProviderScope<NavKey>.tvEntries(
                 },
             navigateToMovie = resumedAction { itemId -> navigate(MovieRoute(itemId.toString())) },
             navigateToShow = resumedAction { itemId -> navigate(ShowRoute(itemId.toString())) },
+            navigateToPlayer =
+                resumedAction { itemId, itemKind ->
+                    navigate(
+                        PlayerRoute(itemId = itemId.toString(), itemKind = itemKind.serialName)
+                    )
+                },
         )
     }
     entry<MovieRoute> { key ->
@@ -247,7 +263,7 @@ private fun EntryProviderScope<NavKey>.tvEntries(
             navigateToItem =
                 resumedAction { item ->
                     when (item) {
-                        is FindroidSeason -> navigate(SeasonRoute(seasonId = item.id.toString()))
+                        is JellyxSeason -> navigate(SeasonRoute(seasonId = item.id.toString()))
                         else -> Unit
                     }
                 },
@@ -270,7 +286,7 @@ private fun EntryProviderScope<NavKey>.tvEntries(
                     navigate(
                         PlayerRoute(
                             itemId = itemId.toString(),
-                            itemKind = BaseItemKind.SEASON.serialName,
+                            itemKind = BaseItemKind.EPISODE.serialName,
                         )
                     )
                 },
@@ -281,6 +297,25 @@ private fun EntryProviderScope<NavKey>.tvEntries(
             itemId = UUID.fromString(key.itemId),
             itemKind = key.itemKind,
             startFromBeginning = false,
+            onNavigateBack = goBack,
+            onNavigateToSeason = { seasonId ->
+                goBack()
+                navigateOrReuse(SeasonRoute(seasonId = seasonId.toString()))
+            },
+            onOpenRecommendedItem = { targetId, targetKind ->
+                goBack()
+                when (targetKind) {
+                    BaseItemKind.SERIES -> navigate(ShowRoute(targetId.toString()))
+                    BaseItemKind.MOVIE ->
+                        navigate(
+                            PlayerRoute(
+                                itemId = targetId.toString(),
+                                itemKind = BaseItemKind.MOVIE.serialName,
+                            )
+                        )
+                    else -> navigate(MovieRoute(targetId.toString()))
+                }
+            },
         )
     }
     entry<SettingsRoute> {

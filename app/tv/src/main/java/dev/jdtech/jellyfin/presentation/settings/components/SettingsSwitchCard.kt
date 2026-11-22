@@ -26,7 +26,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Switch
 import androidx.tv.material3.Text
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.settings.R as SettingsR
 import dev.jdtech.jellyfin.settings.domain.models.Preference
@@ -90,7 +90,7 @@ fun SettingsSwitchCard(
 @Preview
 @Composable
 private fun SettingsSwitchCardPreview() {
-    FindroidTheme {
+    JellyxTheme {
         SettingsSwitchCard(
             preference =
                 PreferenceSwitch(
@@ -106,7 +106,7 @@ private fun SettingsSwitchCardPreview() {
 @Preview
 @Composable
 private fun SettingsSwitchCardDisabledPreview() {
-    FindroidTheme {
+    JellyxTheme {
         SettingsSwitchCard(
             preference =
                 PreferenceSwitch(
@@ -123,7 +123,7 @@ private fun SettingsSwitchCardDisabledPreview() {
 @Preview
 @Composable
 private fun SettingsSwitchCardDescriptionPreview() {
-    FindroidTheme {
+    JellyxTheme {
         SettingsSwitchCard(
             preference =
                 PreferenceSwitch(

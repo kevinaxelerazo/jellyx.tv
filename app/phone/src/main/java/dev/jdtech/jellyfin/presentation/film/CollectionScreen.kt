@@ -1,5 +1,6 @@
 package dev.jdtech.jellyfin.presentation.film
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +17,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
@@ -23,22 +25,23 @@ import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jdtech.jellyfin.core.R as CoreR
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyMovies
 import dev.jdtech.jellyfin.film.presentation.collection.CollectionAction
 import dev.jdtech.jellyfin.film.presentation.collection.CollectionState
 import dev.jdtech.jellyfin.film.presentation.collection.CollectionViewModel
 import dev.jdtech.jellyfin.models.CollectionSection
-import dev.jdtech.jellyfin.models.FindroidItem
+import dev.jdtech.jellyfin.models.JellyxItem
 import dev.jdtech.jellyfin.models.UiText
 import dev.jdtech.jellyfin.presentation.film.components.CollectionGrid
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import java.util.UUID
 
 @Composable
 fun CollectionScreen(
     collectionId: UUID,
     collectionName: String,
-    onItemClick: (item: FindroidItem) -> Unit,
+    onItemClick: (item: JellyxItem) -> Unit,
     navigateBack: () -> Unit,
     viewModel: CollectionViewModel = hiltViewModel(),
 ) {
@@ -89,14 +92,23 @@ fun CollectionScreenLayout(
         },
         contentWindowInsets = WindowInsets.statusBars.union(WindowInsets.displayCutout),
     ) { innerPadding ->
-        CollectionGrid(sections = state.sections, innerPadding = innerPadding, onAction = onAction)
+        Box(modifier = Modifier.fillMaxSize()) {
+            CollectionGrid(
+                sections = state.sections,
+                innerPadding = innerPadding,
+                onAction = onAction,
+            )
+            if (state.isLoading && state.sections.isEmpty()) {
+                JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center))
+            }
+        }
     }
 }
 
 @PreviewScreenSizes
 @Composable
 private fun CollectionScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         CollectionScreenLayout(
             collectionName = "Marvel",
             state =

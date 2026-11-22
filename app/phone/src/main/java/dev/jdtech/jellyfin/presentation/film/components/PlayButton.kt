@@ -17,13 +17,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyEpisode
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyMovie
-import dev.jdtech.jellyfin.models.FindroidItem
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
 @Composable
 fun PlayButton(
-    item: FindroidItem,
+    item: JellyxItem,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
@@ -50,11 +50,11 @@ fun PlayButton(
 @Preview(showBackground = true)
 @Composable
 private fun PlayButtonMoviePreview() {
-    FindroidTheme { PlayButton(item = dummyMovie, onClick = {}) }
+    JellyxTheme { PlayButton(item = dummyMovie, onClick = {}) }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun PlayButtonEpisodePreview() {
-    FindroidTheme { PlayButton(item = dummyEpisode, onClick = {}) }
+    JellyxTheme { PlayButton(item = dummyEpisode, onClick = {}) }
 }

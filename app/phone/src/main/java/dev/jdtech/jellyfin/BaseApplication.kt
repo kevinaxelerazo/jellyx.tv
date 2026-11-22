@@ -25,6 +25,7 @@ import dagger.hilt.android.HiltAndroidApp
 import dev.jdtech.jellyfin.settings.domain.AppPreferences
 import dev.jdtech.jellyfin.work.MpvCleanupWorker
 import dev.jdtech.jellyfin.work.SyncWorker
+import dev.jdtech.jellyfin.work.UpdateCheckWorker
 import javax.inject.Inject
 import kotlin.time.ExperimentalTime
 import okio.Path.Companion.toOkioPath
@@ -64,6 +65,7 @@ class BaseApplication : Application(), Configuration.Provider, SingletonImageLoa
         val workManager = WorkManager.getInstance(applicationContext)
 
         scheduleUserDataSync(workManager)
+        UpdateCheckWorker.schedulePeriodicCheck(workManager)
 
         if (!appPreferences.getValue(appPreferences.mpvMigrated)) {
             scheduleMpvCleanup(workManager)

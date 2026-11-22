@@ -11,22 +11,34 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
 import dev.jdtech.jellyfin.core.presentation.theme.Spacings
+import dev.jdtech.jellyfin.core.presentation.theme.accentPaletteFor
 
 @Composable
-fun FindroidTheme(
+fun JellyxTheme(
     darkTheme: Boolean? = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
+    accentColor: String = "jellyfin",
     content: @Composable () -> Unit,
 ) {
-    val darkTheme = darkTheme ?: isSystemInDarkTheme()
-    val colorScheme =
+    val isDark = darkTheme ?: isSystemInDarkTheme()
+    val accent = accentPaletteFor(accentColor)
+    val baseScheme =
         when {
             dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
                 val context = LocalContext.current
-                if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+                if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             }
-            darkTheme -> darkScheme
+            isDark -> darkScheme
             else -> lightScheme
+        }
+    val colorScheme =
+        if (accent != null) {
+            baseScheme.copy(
+                primary = if (isDark) accent.primaryDark else accent.primaryLight,
+                onPrimary = if (isDark) accent.onPrimaryDark else accent.onPrimaryLight,
+            )
+        } else {
+            baseScheme
         }
 
     MaterialTheme(colorScheme = colorScheme, shapes = shapes) {

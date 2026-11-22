@@ -2,6 +2,8 @@ package dev.jdtech.jellyfin.presentation.film
 
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,19 +15,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,19 +40,25 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.toColorInt
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jdtech.jellyfin.PlayerActivity
 import dev.jdtech.jellyfin.core.R as CoreR
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
+import dev.jdtech.jellyfin.core.presentation.components.RatingsRow
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyShow
 import dev.jdtech.jellyfin.film.presentation.show.ShowAction
 import dev.jdtech.jellyfin.film.presentation.show.ShowState
 import dev.jdtech.jellyfin.film.presentation.show.ShowViewModel
-import dev.jdtech.jellyfin.models.FindroidItem
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.models.toNativeRatings
 import dev.jdtech.jellyfin.presentation.film.components.ActorsRow
 import dev.jdtech.jellyfin.presentation.film.components.Direction
 import dev.jdtech.jellyfin.presentation.film.components.InfoText
@@ -56,7 +68,7 @@ import dev.jdtech.jellyfin.presentation.film.components.ItemHeader
 import dev.jdtech.jellyfin.presentation.film.components.ItemPoster
 import dev.jdtech.jellyfin.presentation.film.components.ItemTopBar
 import dev.jdtech.jellyfin.presentation.film.components.OverviewText
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.presentation.utils.rememberSafePadding
 import dev.jdtech.jellyfin.utils.getShowDateString
@@ -68,7 +80,7 @@ fun ShowScreen(
     showId: UUID,
     navigateBack: () -> Unit,
     navigateHome: () -> Unit,
-    navigateToItem: (item: FindroidItem) -> Unit,
+    navigateToItem: (item: JellyxItem) -> Unit,
     navigateToPerson: (personId: UUID) -> Unit,
     viewModel: ShowViewModel = hiltViewModel(),
 ) {
@@ -76,8 +88,24 @@ fun ShowScreen(
     val uriHandler = LocalUriHandler.current
 
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var skipFirstResume by remember { mutableStateOf(true) }
 
     LaunchedEffect(true) { viewModel.loadShow(showId = showId) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (skipFirstResume) {
+                    skipFirstResume = false
+                } else {
+                    viewModel.loadShow(showId = showId)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     ShowScreenLayout(
         state = state,
@@ -170,20 +198,7 @@ private fun ShowScreenLayout(state: ShowState, onAction: (ShowAction) -> Unit) {
                         show.officialRating?.let { officialRating ->
                             Text(text = officialRating, style = MaterialTheme.typography.bodyMedium)
                         }
-                        show.communityRating?.let { communityRating ->
-                            Row(verticalAlignment = Alignment.Bottom) {
-                                Icon(
-                                    painter = painterResource(CoreR.drawable.ic_star),
-                                    contentDescription = null,
-                                    tint = Color("#F2C94C".toColorInt()),
-                                )
-                                Spacer(Modifier.width(MaterialTheme.spacings.extraSmall))
-                                Text(
-                                    text = "%.1f".format(communityRating),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            }
-                        }
+                        RatingsRow(ratings = show.toNativeRatings())
                     }
                     Spacer(Modifier.height(MaterialTheme.spacings.small))
                     ItemButtonsBar(
@@ -211,7 +226,7 @@ private fun ShowScreenLayout(state: ShowState, onAction: (ShowAction) -> Unit) {
                         canPlay = state.seasons.isNotEmpty(),
                     )
                     Spacer(Modifier.height(MaterialTheme.spacings.small))
-                    OverviewText(text = show.overview, maxCollapsedLines = 3)
+                    OverviewText(text = show.overview)
                     Spacer(Modifier.height(MaterialTheme.spacings.medium))
                     InfoText(
                         genres = show.genres,
@@ -266,11 +281,44 @@ private fun ShowScreenLayout(state: ShowState, onAction: (ShowAction) -> Unit) {
                             Arrangement.spacedBy(MaterialTheme.spacings.default),
                     ) {
                         items(items = state.seasons, key = { item -> item.id }) { season ->
-                            ItemCard(
-                                item = season,
-                                direction = Direction.VERTICAL,
-                                onClick = { onAction(ShowAction.NavigateToItem(season)) },
-                            )
+                            val downloadedCount = state.downloadedCountBySeason[season.id] ?: 0
+                            Box {
+                                ItemCard(
+                                    item = season,
+                                    direction = Direction.VERTICAL,
+                                    onClick = { onAction(ShowAction.NavigateToItem(season)) },
+                                )
+                                if (downloadedCount > 0) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier =
+                                            Modifier.align(Alignment.TopStart)
+                                                .padding(MaterialTheme.spacings.small)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color.Black.copy(alpha = 0.78f))
+                                                .border(
+                                                    1.dp,
+                                                    MaterialTheme.colorScheme.primary,
+                                                    RoundedCornerShape(8.dp),
+                                                )
+                                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(CoreR.drawable.ic_download),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(12.dp),
+                                        )
+                                        Text(
+                                            text = "$downloadedCount",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                     Spacer(Modifier.height(MaterialTheme.spacings.medium))
@@ -287,7 +335,7 @@ private fun ShowScreenLayout(state: ShowState, onAction: (ShowAction) -> Unit) {
                 }
                 Spacer(Modifier.height(paddingBottom))
             }
-        } ?: run { CircularProgressIndicator(modifier = Modifier.align(Alignment.Center)) }
+        } ?: run { JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center)) }
 
         ItemTopBar(
             hasBackButton = true,
@@ -301,5 +349,5 @@ private fun ShowScreenLayout(state: ShowState, onAction: (ShowAction) -> Unit) {
 @PreviewScreenSizes
 @Composable
 private fun EpisodeScreenLayoutPreview() {
-    FindroidTheme { ShowScreenLayout(state = ShowState(show = dummyShow), onAction = {}) }
+    JellyxTheme { ShowScreenLayout(state = ShowState(show = dummyShow), onAction = {}) }
 }

@@ -22,15 +22,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import dev.jdtech.jellyfin.models.FindroidEpisode
-import dev.jdtech.jellyfin.models.FindroidItem
-import dev.jdtech.jellyfin.models.FindroidSeason
+import dev.jdtech.jellyfin.models.JellyxEpisode
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.models.JellyxSeason
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.presentation.utils.parallaxLayoutModifier
 
 @Composable
 fun ItemHeader(
-    item: FindroidItem,
+    item: JellyxItem,
     scrollState: ScrollState,
     showLogo: Boolean = false,
     content: @Composable (BoxScope.() -> Unit) = {},
@@ -38,16 +38,19 @@ fun ItemHeader(
     val context = LocalContext.current
     var backdropUri =
         when (item) {
-            is FindroidEpisode -> item.images.primary
-            else -> item.images.backdrop
+            is JellyxEpisode ->
+                item.images.primary ?: item.images.showBackdrop ?: item.images.backdrop
+            is JellyxSeason ->
+                item.images.backdrop ?: item.images.showBackdrop ?: item.images.showPrimary
+            else -> item.images.backdrop ?: item.images.showBackdrop ?: item.images.primary
         }
 
     // Ugly workaround to append the files directory when loading local images
-    if (backdropUri?.scheme == null) {
+    if (backdropUri != null && backdropUri.scheme == null) {
         backdropUri =
             Uri.Builder()
                 .appendEncodedPath("${context.filesDir}")
-                .appendEncodedPath(backdropUri?.path)
+                .appendEncodedPath(backdropUri.path)
                 .build()
     }
 
@@ -71,7 +74,7 @@ fun ItemHeader(
 
 @Composable
 fun ItemHeader(
-    item: FindroidItem,
+    item: JellyxItem,
     lazyListState: LazyListState,
     showLogo: Boolean = false,
     content: @Composable (BoxScope.() -> Unit) = {},
@@ -79,17 +82,19 @@ fun ItemHeader(
     val context = LocalContext.current
     var backdropUri =
         when (item) {
-            is FindroidEpisode -> item.images.primary
-            is FindroidSeason -> item.images.showBackdrop
-            else -> item.images.backdrop
+            is JellyxEpisode ->
+                item.images.primary ?: item.images.showBackdrop ?: item.images.backdrop
+            is JellyxSeason ->
+                item.images.showBackdrop ?: item.images.backdrop ?: item.images.showPrimary
+            else -> item.images.backdrop ?: item.images.showBackdrop ?: item.images.primary
         }
 
     // Ugly workaround to append the files directory when loading local images
-    if (backdropUri?.scheme == null) {
+    if (backdropUri != null && backdropUri.scheme == null) {
         backdropUri =
             Uri.Builder()
                 .appendEncodedPath("${context.filesDir}")
-                .appendEncodedPath(backdropUri?.path)
+                .appendEncodedPath(backdropUri.path)
                 .build()
     }
 
@@ -113,7 +118,7 @@ fun ItemHeader(
 
 @Composable
 private fun ItemHeaderBase(
-    item: FindroidItem,
+    item: JellyxItem,
     showLogo: Boolean = false,
     backdropImage: @Composable (() -> Unit),
     content: @Composable (BoxScope.() -> Unit) = {},
@@ -122,7 +127,7 @@ private fun ItemHeaderBase(
 
     val logoUri =
         when (item) {
-            is FindroidEpisode -> item.images.showLogo
+            is JellyxEpisode -> item.images.showLogo
             else -> item.images.logo
         }
 

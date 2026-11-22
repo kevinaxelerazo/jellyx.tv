@@ -27,10 +27,13 @@
 
         <ProgressBar
             android:id="@id/exo_buffering"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            style="@android:style/Widget.ProgressBar"
+            android:layout_width="68dp"
+            android:layout_height="68dp"
             android:layout_gravity="center"
-            android:indeterminate="true" />
+            android:alpha="0.72"
+            android:indeterminate="true"
+            android:indeterminateDrawable="@drawable/jellyx_loading_logo_rotate" />
 
         <TextView
             android:id="@id/exo_error_message"

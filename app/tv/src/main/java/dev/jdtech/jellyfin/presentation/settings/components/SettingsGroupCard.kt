@@ -18,7 +18,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.settings.R as SettingsR
 import dev.jdtech.jellyfin.settings.domain.models.Preference as PreferenceBackend
@@ -117,7 +117,7 @@ fun SettingsGroupCard(
 @Preview
 @Composable
 private fun SettingsGroupCardPreview() {
-    FindroidTheme {
+    JellyxTheme {
         SettingsGroupCard(
             group =
                 PreferenceGroup(

@@ -9,11 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
@@ -40,13 +38,13 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.tv.material3.Button
 import androidx.tv.material3.Icon
 import androidx.tv.material3.IconButton
-import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import dev.jdtech.jellyfin.core.R
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
 import dev.jdtech.jellyfin.models.UiText
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.setup.presentation.login.LoginAction
 import dev.jdtech.jellyfin.setup.presentation.login.LoginEvent
@@ -201,9 +199,9 @@ private fun LoginScreenLayout(
                 ) {
                     Box(modifier = Modifier.fillMaxWidth()) {
                         if (state.isLoading) {
-                            CircularProgressIndicator(
-                                color = LocalContentColor.current,
-                                modifier = Modifier.size(24.dp).align(Alignment.CenterStart),
+                            JellyxLoadingLogo(
+                                size = 22.dp,
+                                modifier = Modifier.align(Alignment.CenterStart),
                             )
                         }
                         Text(
@@ -243,10 +241,9 @@ private fun LoginScreenLayout(
                         ) {
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 if (state.quickConnectCode != null) {
-                                    CircularProgressIndicator(
-                                        color = LocalContentColor.current,
-                                        modifier =
-                                            Modifier.size(24.dp).align(Alignment.CenterStart),
+                                    JellyxLoadingLogo(
+                                        size = 22.dp,
+                                        modifier = Modifier.align(Alignment.CenterStart),
                                     )
                                 }
                                 Text(
@@ -281,7 +278,7 @@ private fun LoginScreenLayout(
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun LoginScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         LoginScreenLayout(
             state = LoginState(serverName = "Demo Server", quickConnectEnabled = true),
             onAction = {},
@@ -292,7 +289,7 @@ private fun LoginScreenLayoutPreview() {
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun LoginScreenLayoutPreviewError() {
-    FindroidTheme {
+    JellyxTheme {
         LoginScreenLayout(
             state =
                 LoginState(

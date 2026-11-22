@@ -1,11 +1,17 @@
 package dev.jdtech.jellyfin
 
+import android.content.Context
+import android.content.Intent
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
@@ -19,8 +25,17 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
@@ -35,23 +50,28 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import androidx.window.core.layout.WindowSizeClass
 import dev.jdtech.jellyfin.core.R as CoreR
+import dev.jdtech.jellyfin.film.presentation.search.DEFAULT_STREAMING_PLATFORM_SHORTCUTS
 import dev.jdtech.jellyfin.models.CollectionType
-import dev.jdtech.jellyfin.models.FindroidBoxSet
-import dev.jdtech.jellyfin.models.FindroidCollection
-import dev.jdtech.jellyfin.models.FindroidEpisode
-import dev.jdtech.jellyfin.models.FindroidFolder
-import dev.jdtech.jellyfin.models.FindroidItem
-import dev.jdtech.jellyfin.models.FindroidMovie
-import dev.jdtech.jellyfin.models.FindroidSeason
-import dev.jdtech.jellyfin.models.FindroidShow
+import dev.jdtech.jellyfin.models.JellyxBoxSet
+import dev.jdtech.jellyfin.models.JellyxChannel
+import dev.jdtech.jellyfin.models.JellyxCollection
+import dev.jdtech.jellyfin.models.JellyxEpisode
+import dev.jdtech.jellyfin.models.JellyxFolder
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.models.JellyxMovie
+import dev.jdtech.jellyfin.models.JellyxSeason
+import dev.jdtech.jellyfin.models.JellyxShow
+import org.jellyfin.sdk.model.api.BaseItemKind
 import dev.jdtech.jellyfin.navigation.navigateOrReuse
 import dev.jdtech.jellyfin.navigation.resumedAction
 import dev.jdtech.jellyfin.presentation.film.CollectionScreen
 import dev.jdtech.jellyfin.presentation.film.DownloadsScreen
 import dev.jdtech.jellyfin.presentation.film.EpisodeScreen
 import dev.jdtech.jellyfin.presentation.film.FavoritesScreen
+import dev.jdtech.jellyfin.presentation.film.GenresScreen
 import dev.jdtech.jellyfin.presentation.film.HomeScreen
 import dev.jdtech.jellyfin.presentation.film.LibraryScreen
+import dev.jdtech.jellyfin.presentation.film.LiveTvScreen
 import dev.jdtech.jellyfin.presentation.film.MediaScreen
 import dev.jdtech.jellyfin.presentation.film.MovieScreen
 import dev.jdtech.jellyfin.presentation.film.PersonScreen
@@ -72,7 +92,8 @@ import dev.jdtech.jellyfin.setup.presentation.permission.PermissionAction
 import dev.jdtech.jellyfin.setup.presentation.permission.PermissionViewModel
 import java.util.UUID
 
-private val TOP_LEVEL_ROUTES = setOf(HomeRoute, MediaRoute, DownloadsRoute)
+private val TOP_LEVEL_ROUTES =
+    setOf(HomeRoute, MediaRoute, LiveTvRoute, GenresRoute, DownloadsRoute)
 private val GLOBAL_TRANSITION_SPEC = fadeIn(tween(300)) togetherWith fadeOut(tween(300))
 
 data class TabBarItem(
@@ -90,6 +111,20 @@ val mediaTab =
         title = CoreR.string.title_media,
         icon = CoreR.drawable.ic_library,
         route = MediaRoute,
+    )
+
+val liveTvTab =
+    TabBarItem(
+        title = CoreR.string.live_tv,
+        icon = CoreR.drawable.ic_tv,
+        route = LiveTvRoute,
+    )
+
+val genresTab =
+    TabBarItem(
+        title = CoreR.string.genres,
+        icon = CoreR.drawable.ic_genres,
+        route = GenresRoute,
     )
 
 val downloadsTab =
@@ -205,10 +240,11 @@ private fun MainNavigation(
 ) {
     val navigationItems =
         when (isOfflineMode) {
-            false -> listOf(homeTab, mediaTab, downloadsTab)
+            false -> listOf(homeTab, mediaTab, liveTvTab, genresTab, downloadsTab)
             true -> listOf(homeTab, downloadsTab)
         }
     val tabRoutes = navigationItems.map { it.route }
+    val prefilledSearchQuery = remember { mutableStateOf<String?>(null) }
 
     val topLevelRoute = navigationState.topLevelRoute
     val atTabRoot = navigationState.currentBackStack().last() == topLevelRoute
@@ -247,14 +283,19 @@ private fun MainNavigation(
             }
         }
 
+    val context = LocalContext.current
+
     val entryProvider = entryProvider {
         mainEntries(
             navigator = navigator,
+            context = context,
+            showFloatingPlatformsBar = customNavSuiteType != NavigationSuiteType.NavigationRail,
             onSearchClick = {
                 searchExpanded.value = true
                 navigator.navigate(MediaRoute)
             },
             searchExpanded = searchExpanded,
+            prefilledSearchQuery = prefilledSearchQuery,
             permissionViewModel = permissionViewModel,
             permissionApplicable = permissionApplicable,
         )
@@ -281,6 +322,42 @@ private fun MainNavigation(
                     enabled = item.enabled,
                     label = { Text(text = stringResource(item.title)) },
                 )
+            }
+            if (customNavSuiteType == NavigationSuiteType.NavigationRail && !isOfflineMode) {
+                DEFAULT_STREAMING_PLATFORM_SHORTCUTS.forEach { platform ->
+                    item(
+                        selected = false,
+                        onClick = {
+                            prefilledSearchQuery.value = platform.searchQuery
+                            searchExpanded.value = true
+                            navigator.navigate(MediaRoute)
+                        },
+                        icon = {
+                            Box(
+                                modifier =
+                                    Modifier.size(28.dp)
+                                        .clip(RoundedCornerShape(7.dp))
+                                        .background(Color(platform.brandColorHex)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = platform.shortBadge,
+                                    color = Color.White,
+                                    fontSize = if (platform.shortBadge.length > 2) 9.sp else 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                )
+                            }
+                        },
+                        label = {
+                            Text(
+                                text = platform.label,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                    )
+                }
             }
         },
         layoutType = customNavSuiteType,
@@ -411,8 +488,11 @@ private fun EntryProviderScope<NavKey>.setupEntries(
 
 private fun EntryProviderScope<NavKey>.mainEntries(
     navigator: Navigator,
+    context: Context,
+    showFloatingPlatformsBar: Boolean,
     onSearchClick: () -> Unit,
     searchExpanded: MutableState<Boolean>,
+    prefilledSearchQuery: MutableState<String?>,
     permissionViewModel: PermissionViewModel,
     permissionApplicable: Boolean,
 ) {
@@ -443,15 +523,33 @@ private fun EntryProviderScope<NavKey>.mainEntries(
                     navigator.navigate(SettingsRoute(indexes = listOf(CoreR.string.title_settings)))
                 },
             onManageServers = dropUnlessResumed { navigator.navigate(ServersRoute) },
-            onItemClick = resumedAction { item -> navigateToItem(navigator, item) },
+            onItemClick = resumedAction { item -> navigateToItem(navigator, item, context) },
+            onPlatformClick = { query ->
+                prefilledSearchQuery.value = query
+                searchExpanded.value = true
+                navigator.navigate(MediaRoute)
+            },
+            showFloatingPlatformsBar = showFloatingPlatformsBar,
         )
     }
     entry<MediaRoute> {
         MediaScreen(
-            onItemClick = resumedAction { item -> navigateToItem(navigator, item) },
+            onItemClick = resumedAction { item -> navigateToItem(navigator, item, context) },
             onFavoritesClick = dropUnlessResumed { navigator.navigate(FavoritesRoute) },
             searchExpanded = searchExpanded.value,
             onSearchExpand = { searchExpanded.value = it },
+            prefilledSearchQuery = prefilledSearchQuery.value,
+            onPrefilledSearchQueryConsumed = { prefilledSearchQuery.value = null },
+        )
+    }
+    entry<LiveTvRoute> {
+        LiveTvScreen(
+            onChannelClick = resumedAction { channel -> navigateToItem(navigator, channel, context) },
+        )
+    }
+    entry<GenresRoute> {
+        GenresScreen(
+            onItemClick = resumedAction { item -> navigateToItem(navigator, item, context) },
         )
     }
     entry<DownloadsRoute> {
@@ -461,6 +559,7 @@ private fun EntryProviderScope<NavKey>.mainEntries(
                     navigateToItem(
                         navigator,
                         item,
+                        context,
                     )
                 }
         )
@@ -470,7 +569,7 @@ private fun EntryProviderScope<NavKey>.mainEntries(
             libraryId = UUID.fromString(key.libraryId),
             libraryName = key.libraryName,
             libraryType = key.libraryType,
-            onItemClick = resumedAction { item -> navigateToItem(navigator, item) },
+            onItemClick = resumedAction { item -> navigateToItem(navigator, item, context) },
             navigateBack = dropUnlessResumed { navigator.goBack() },
         )
     }
@@ -478,13 +577,13 @@ private fun EntryProviderScope<NavKey>.mainEntries(
         CollectionScreen(
             collectionId = UUID.fromString(key.collectionId),
             collectionName = key.collectionName,
-            onItemClick = resumedAction { item -> navigateToItem(navigator, item) },
+            onItemClick = resumedAction { item -> navigateToItem(navigator, item, context) },
             navigateBack = dropUnlessResumed { navigator.goBack() },
         )
     }
     entry<FavoritesRoute> {
         FavoritesScreen(
-            onItemClick = resumedAction { item -> navigateToItem(navigator, item) },
+            onItemClick = resumedAction { item -> navigateToItem(navigator, item, context) },
             navigateBack = dropUnlessResumed { navigator.goBack() },
         )
     }
@@ -509,6 +608,7 @@ private fun EntryProviderScope<NavKey>.mainEntries(
                     navigateToItem(
                         navigator,
                         item,
+                        context,
                     )
                 },
             navigateToPerson =
@@ -527,6 +627,7 @@ private fun EntryProviderScope<NavKey>.mainEntries(
                     navigateToItem(
                         navigator,
                         item,
+                        context,
                     )
                 },
             navigateToSeries =
@@ -560,6 +661,7 @@ private fun EntryProviderScope<NavKey>.mainEntries(
                     navigateToItem(
                         navigator,
                         item,
+                        context,
                     )
                 },
         )
@@ -588,17 +690,26 @@ private fun EntryProviderScope<NavKey>.mainEntries(
     entry<AboutRoute> { AboutScreen(navigateBack = dropUnlessResumed { navigator.goBack() }) }
 }
 
-private fun navigateToItem(navigator: Navigator, item: FindroidItem) {
+private fun navigateToItem(navigator: Navigator, item: JellyxItem, context: Context) {
     when (item) {
-        is FindroidBoxSet ->
+        is JellyxBoxSet ->
             navigator.navigate(
                 CollectionRoute(collectionId = item.id.toString(), collectionName = item.name)
             )
-        is FindroidMovie -> navigator.navigate(MovieRoute(movieId = item.id.toString()))
-        is FindroidShow -> navigator.navigate(ShowRoute(showId = item.id.toString()))
-        is FindroidSeason -> navigator.navigate(SeasonRoute(seasonId = item.id.toString()))
-        is FindroidEpisode -> navigator.navigate(EpisodeRoute(episodeId = item.id.toString()))
-        is FindroidCollection ->
+        is JellyxMovie -> navigator.navigate(MovieRoute(movieId = item.id.toString()))
+        is JellyxShow -> navigator.navigate(ShowRoute(showId = item.id.toString()))
+        is JellyxSeason -> navigator.navigate(SeasonRoute(seasonId = item.id.toString()))
+        is JellyxEpisode -> navigator.navigate(EpisodeRoute(episodeId = item.id.toString()))
+        is JellyxChannel -> {
+            val intent =
+                Intent(context, PlayerActivity::class.java).apply {
+                    putExtra("itemId", item.id.toString())
+                    putExtra("itemKind", BaseItemKind.TV_CHANNEL.serialName)
+                    putExtra("startFromBeginning", true)
+                }
+            context.startActivity(intent)
+        }
+        is JellyxCollection ->
             navigator.navigate(
                 LibraryRoute(
                     libraryId = item.id.toString(),
@@ -606,7 +717,7 @@ private fun navigateToItem(navigator: Navigator, item: FindroidItem) {
                     libraryType = item.type,
                 )
             )
-        is FindroidFolder ->
+        is JellyxFolder ->
             navigator.navigate(
                 LibraryRoute(
                     libraryId = item.id.toString(),

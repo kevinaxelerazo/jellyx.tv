@@ -20,12 +20,12 @@ import androidx.tv.material3.Text
 import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyEpisode
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyShow
-import dev.jdtech.jellyfin.models.FindroidItem
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
 @Composable
-fun ProgressBadge(item: FindroidItem, modifier: Modifier = Modifier) {
+fun ProgressBadge(item: JellyxItem, modifier: Modifier = Modifier) {
     if (!(!item.played && item.unplayedItemCount == null)) {
         Box(
             modifier =
@@ -63,11 +63,11 @@ fun ProgressBadge(item: FindroidItem, modifier: Modifier = Modifier) {
 @Preview
 @Composable
 private fun ProgressBadgePreviewWatched() {
-    FindroidTheme { ProgressBadge(item = dummyEpisode) }
+    JellyxTheme { ProgressBadge(item = dummyEpisode) }
 }
 
 @Preview
 @Composable
 private fun ProgressBadgePreviewItemRemaining() {
-    FindroidTheme { ProgressBadge(item = dummyShow) }
+    JellyxTheme { ProgressBadge(item = dummyShow) }
 }

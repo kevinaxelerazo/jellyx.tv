@@ -35,7 +35,7 @@ import dev.jdtech.jellyfin.models.Server
 import dev.jdtech.jellyfin.models.ServerAddress
 import dev.jdtech.jellyfin.models.ServerWithAddresses
 import dev.jdtech.jellyfin.presentation.setup.components.ServerItem
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.setup.R as SetupR
 import dev.jdtech.jellyfin.setup.presentation.servers.ServersAction
@@ -176,7 +176,7 @@ private fun ServersScreenLayout(state: ServersState, onAction: (ServersAction) -
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun ServersScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         ServersScreenLayout(
             state =
                 ServersState(
@@ -204,5 +204,5 @@ private fun ServersScreenLayoutPreview() {
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun ServersScreenLayoutPreviewNoServers() {
-    FindroidTheme { ServersScreenLayout(state = ServersState(), onAction = {}) }
+    JellyxTheme { ServersScreenLayout(state = ServersState(), onAction = {}) }
 }

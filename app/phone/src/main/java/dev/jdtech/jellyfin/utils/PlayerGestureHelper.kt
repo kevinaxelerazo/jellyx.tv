@@ -48,6 +48,8 @@ class PlayerGestureHelper(
      */
     var isZoomEnabled = false
 
+    var isLiveTv: Boolean = false
+
     /**
      * Tracks a value during a swipe gesture (between multiple onScroll calls). When the gesture
      * starts it's reset to an initial value and gets increased or decreased (depending on the
@@ -88,8 +90,8 @@ class PlayerGestureHelper(
                 }
 
                 override fun onLongPress(e: MotionEvent) {
-                    // Disables long press gesture if view is locked
-                    if (isControlsLocked) return
+                    // Disables long press gesture if view is locked or in Live TV mode
+                    if (isControlsLocked || isLiveTv) return
 
                     // Stop long press gesture when more than 1 pointer
                     if (currentNumberOfPointers > 1) return
@@ -118,6 +120,7 @@ class PlayerGestureHelper(
                     when (e.x.toInt()) {
                         in leftmostAreaStart until middleAreaStart -> {
                             // Tapped on the leftmost area (seek backward)
+                            if (isLiveTv) return false
                             rewind()
                         }
                         in middleAreaStart until rightmostAreaStart -> {
@@ -126,6 +129,7 @@ class PlayerGestureHelper(
                         }
                         in rightmostAreaStart until viewWidth -> {
                             // Tapped on the rightmost area (seek forward)
+                            if (isLiveTv) return false
                             fastForward()
                         }
                     }
@@ -253,8 +257,8 @@ class PlayerGestureHelper(
                     if (firstEvent == null) return false
                     // Excludes area where app gestures conflicting with system gestures
                     if (inExclusionArea(firstEvent)) return false
-                    // Disables seek gestures if view is locked
-                    if (isControlsLocked) return false
+                    // Disables seek gestures if view is locked or in Live TV mode
+                    if (isControlsLocked || isLiveTv) return false
 
                     // Check whether swipe was oriented vertically
                     if (abs(distanceY / distanceX) < 2) {

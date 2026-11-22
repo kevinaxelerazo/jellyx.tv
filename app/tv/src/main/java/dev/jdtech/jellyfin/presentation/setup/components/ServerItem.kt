@@ -23,7 +23,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyDiscoveredServer
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
 @Composable
@@ -84,7 +84,7 @@ fun ServerItem(
 @Preview
 @Composable
 private fun ServerItemPreview() {
-    FindroidTheme {
+    JellyxTheme {
         ServerItem(name = dummyDiscoveredServer.name, address = dummyDiscoveredServer.address)
     }
 }

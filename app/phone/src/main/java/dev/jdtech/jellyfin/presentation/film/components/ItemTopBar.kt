@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import dev.jdtech.jellyfin.core.R as CoreR
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.presentation.utils.rememberSafePadding
 
@@ -74,5 +74,5 @@ fun ItemTopBar(
 @Composable
 @Preview(showBackground = true)
 private fun ItemTopBarPreview() {
-    FindroidTheme { ItemTopBar(hasBackButton = true, hasHomeButton = true) }
+    JellyxTheme { ItemTopBar(hasBackButton = true, hasHomeButton = true) }
 }

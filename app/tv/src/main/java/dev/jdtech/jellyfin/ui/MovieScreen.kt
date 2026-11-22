@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,13 +45,14 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import dev.jdtech.jellyfin.core.R as CoreR
+import dev.jdtech.jellyfin.core.presentation.components.RatingsRow
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyMovie
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyVideoMetadata
-import dev.jdtech.jellyfin.core.presentation.theme.Yellow
 import dev.jdtech.jellyfin.film.presentation.movie.MovieAction
 import dev.jdtech.jellyfin.film.presentation.movie.MovieState
 import dev.jdtech.jellyfin.film.presentation.movie.MovieViewModel
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.models.toNativeRatings
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.utils.format
 import java.util.UUID
@@ -148,28 +150,12 @@ private fun MovieScreenLayout(state: MovieState, onAction: (MovieAction) -> Unit
                         movie.officialRating?.let {
                             Text(text = it, style = MaterialTheme.typography.labelMedium)
                         }
-                        movie.communityRating?.let {
-                            Row {
-                                Icon(
-                                    painter = painterResource(id = CoreR.drawable.ic_star),
-                                    contentDescription = null,
-                                    tint = Yellow,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Spacer(modifier = Modifier.width(MaterialTheme.spacings.extraSmall))
-                                Text(
-                                    text = String.format(locale, "%.1f", it),
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
-                            }
-                        }
+                        RatingsRow(ratings = movie.toNativeRatings())
                     }
                     Spacer(modifier = Modifier.height(MaterialTheme.spacings.medium))
                     Text(
                         text = movie.overview,
                         style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.width(640.dp),
                     )
                     Spacer(modifier = Modifier.height(MaterialTheme.spacings.default))
@@ -300,14 +286,14 @@ private fun MovieScreenLayout(state: MovieState, onAction: (MovieAction) -> Unit
             }
 
             LaunchedEffect(true) { focusRequester.requestFocus() }
-        } ?: run { CircularProgressIndicator(modifier = Modifier.align(Alignment.Center)) }
+        } ?: run { JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center)) }
     }
 }
 
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun MovieScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         MovieScreenLayout(
             state = MovieState(movie = dummyMovie, videoMetadata = dummyVideoMetadata),
             onAction = {},

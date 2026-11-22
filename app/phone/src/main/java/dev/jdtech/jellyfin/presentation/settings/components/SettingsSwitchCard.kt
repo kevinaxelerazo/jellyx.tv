@@ -16,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.settings.R as SettingsR
 import dev.jdtech.jellyfin.settings.domain.models.Preference
@@ -66,7 +66,7 @@ fun SettingsSwitchCard(
 @Preview
 @Composable
 private fun SettingsSwitchCardPreview() {
-    FindroidTheme {
+    JellyxTheme {
         SettingsSwitchCard(
             preference =
                 PreferenceSwitch(
@@ -82,7 +82,7 @@ private fun SettingsSwitchCardPreview() {
 @Preview
 @Composable
 private fun SettingsSwitchCardDisabledPreview() {
-    FindroidTheme {
+    JellyxTheme {
         SettingsSwitchCard(
             preference =
                 PreferenceSwitch(

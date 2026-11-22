@@ -57,6 +57,93 @@
             app:layout_constraintTop_toTopOf="parent">
 
             <ImageButton
+                android:id="@+id/btn_live_channels"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:background="@drawable/transparent_circle_background"
+                android:contentDescription="Canales en vivo"
+                android:padding="14dp"
+                android:src="@drawable/ic_tv"
+                android:visibility="gone"
+                app:tint="@android:color/white" />
+
+            <Space
+                android:id="@+id/space_live_channels"
+                android:layout_width="12dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <ImageButton
+                android:id="@+id/btn_live_favorite"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:background="@drawable/transparent_circle_background"
+                android:contentDescription="Favorito"
+                android:padding="14dp"
+                android:src="@drawable/ic_heart"
+                android:visibility="gone"
+                app:tint="@android:color/white" />
+
+            <Space
+                android:id="@+id/space_live_favorite"
+                android:layout_width="12dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <ImageButton
+                android:id="@+id/btn_live_reconnect"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:background="@drawable/transparent_circle_background"
+                android:contentDescription="Reconectar canal"
+                android:padding="14dp"
+                android:src="@drawable/ic_rotate_ccw"
+                android:visibility="gone"
+                app:tint="@android:color/white" />
+
+            <Space
+                android:id="@+id/space_live_reconnect"
+                android:layout_width="12dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <ImageButton
+                android:id="@+id/btn_episodes"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:background="@drawable/transparent_circle_background"
+                android:contentDescription="Episodios"
+                android:padding="14dp"
+                android:src="@drawable/ic_library"
+                android:visibility="gone"
+                app:tint="@android:color/white" />
+
+            <Space
+                android:id="@+id/space_episodes"
+                android:layout_width="12dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <ImageButton
+                android:id="@+id/btn_info"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:background="@drawable/transparent_circle_background"
+                android:contentDescription="Playback Info"
+                android:padding="16dp"
+                android:src="@drawable/ic_info"
+                app:tint="@android:color/white" />
+
+            <Space
+                android:layout_width="16dp"
+                android:layout_height="0dp" />
+
+            <ImageButton
                 android:id="@+id/btn_lockview"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -101,6 +188,7 @@
                 app:tint="@android:color/white" />
 
             <Space
+                android:id="@+id/space_speed"
                 android:layout_width="16dp"
                 android:layout_height="0dp" />
 
@@ -149,6 +237,7 @@
             android:background="@drawable/transparent_circle_background"
             android:padding="16dp"
             android:src="@drawable/ic_skip_back"
+            app:tint="@android:color/white"
             android:contentDescription="@string/player_controls_skip_back" />
 
         <ImageButton
@@ -159,6 +248,7 @@
             android:background="@drawable/transparent_circle_background"
             android:padding="16dp"
             android:src="@drawable/ic_rewind"
+            app:tint="@android:color/white"
             android:contentDescription="@string/player_controls_rewind" />
 
         <ImageButton
@@ -180,6 +270,7 @@
             android:background="@drawable/transparent_circle_background"
             android:padding="16dp"
             android:src="@drawable/ic_fast_forward"
+            app:tint="@android:color/white"
             android:contentDescription="@string/player_controls_fast_forward" />
 
         <ImageButton
@@ -190,6 +281,7 @@
             android:background="@drawable/transparent_circle_background"
             android:padding="16dp"
             android:src="@drawable/ic_skip_forward"
+            app:tint="@android:color/white"
             android:contentDescription="@string/player_controls_skip_forward" />
     </LinearLayout>
 
@@ -211,6 +303,7 @@
             android:contentDescription="@string/player_trickplay" />
 
         <LinearLayout
+            android:id="@+id/vod_time_row"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
@@ -255,6 +348,177 @@
             android:layout_height="wrap_content"
             android:contentDescription="@string/player_controls_progress"
             app:played_color="?attr/colorPrimary" />
+
+        <LinearLayout
+            android:id="@+id/live_cache_bar_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_live_unified_hud"
+            android:orientation="vertical"
+            android:padding="14dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_live_pill"
+                    android:paddingHorizontal="7dp"
+                    android:paddingVertical="2dp"
+                    android:text="● EN VIVO"
+                    android:textColor="@android:color/white"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/live_epg_channel_name"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="10dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="#EBFFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/live_cache_status_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Precarga: 0.0s / 30s"
+                        android:textColor="#CCFFFFFF"
+                        android:textSize="10sp" />
+
+                    <ProgressBar
+                        android:id="@+id/live_cache_progress_bar"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="92dp"
+                        android:layout_height="4dp"
+                        android:layout_marginTop="2dp"
+                        android:indeterminate="false"
+                        android:max="300"
+                        android:progress="0"
+                        android:progressBackgroundTint="#38FFFFFF"
+                        android:progressTint="#38BDF8" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/live_epg_program_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Transmisión en directo"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:id="@+id/live_epg_timeline_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/live_epg_start_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#D9FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <ProgressBar
+                    android:id="@+id/live_epg_progress_bar"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="6dp"
+                    android:layout_marginHorizontal="8dp"
+                    android:layout_weight="1"
+                    android:indeterminate="false"
+                    android:max="1000"
+                    android:progress="0"
+                    android:progressBackgroundTint="#38FFFFFF"
+                    android:progressTint="?attr/colorPrimary" />
+
+                <TextView
+                    android:id="@+id/live_epg_end_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#D9FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/live_epg_time_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Sin programación EPG disponible"
+                android:textColor="#CCFFFFFF"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:id="@+id/live_epg_next_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="6dp"
+                    android:background="#1FFFFFFF" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:text="A continuación"
+                        android:textColor="#7DD3FC"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/live_epg_next_program"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="#E6FFFFFF"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
 
     </LinearLayout>
 

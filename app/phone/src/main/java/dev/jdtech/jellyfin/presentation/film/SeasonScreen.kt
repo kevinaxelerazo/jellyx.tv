@@ -11,42 +11,57 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jdtech.jellyfin.PlayerActivity
+import dev.jdtech.jellyfin.core.R as CoreR
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
 import dev.jdtech.jellyfin.core.presentation.dummy.dummySeason
+import dev.jdtech.jellyfin.film.R as FilmR
 import dev.jdtech.jellyfin.film.presentation.season.SeasonAction
 import dev.jdtech.jellyfin.film.presentation.season.SeasonState
 import dev.jdtech.jellyfin.film.presentation.season.SeasonViewModel
-import dev.jdtech.jellyfin.models.FindroidItem
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.models.isDownloaded
 import dev.jdtech.jellyfin.presentation.film.components.Direction
 import dev.jdtech.jellyfin.presentation.film.components.EpisodeCard
 import dev.jdtech.jellyfin.presentation.film.components.ItemButtonsBar
 import dev.jdtech.jellyfin.presentation.film.components.ItemHeader
 import dev.jdtech.jellyfin.presentation.film.components.ItemPoster
 import dev.jdtech.jellyfin.presentation.film.components.ItemTopBar
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.presentation.utils.rememberSafePadding
 import java.util.UUID
@@ -57,17 +72,34 @@ fun SeasonScreen(
     seasonId: UUID,
     navigateBack: () -> Unit,
     navigateHome: () -> Unit,
-    navigateToItem: (item: FindroidItem) -> Unit,
+    navigateToItem: (item: JellyxItem) -> Unit,
     navigateToSeries: (seriesId: UUID) -> Unit,
     viewModel: SeasonViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var skipFirstResume by remember { mutableStateOf(true) }
 
     LaunchedEffect(true) { viewModel.loadSeason(seasonId = seasonId) }
 
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (skipFirstResume) {
+                    skipFirstResume = false
+                } else {
+                    viewModel.loadSeason(seasonId = seasonId)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     SeasonScreenLayout(
         state = state,
+        onToggleDownloadedFilter = viewModel::toggleDownloadedFilter,
         onAction = { action ->
             when (action) {
                 is SeasonAction.Play -> {
@@ -88,7 +120,11 @@ fun SeasonScreen(
 }
 
 @Composable
-private fun SeasonScreenLayout(state: SeasonState, onAction: (SeasonAction) -> Unit) {
+private fun SeasonScreenLayout(
+    state: SeasonState,
+    onToggleDownloadedFilter: (Boolean) -> Unit = {},
+    onAction: (SeasonAction) -> Unit,
+) {
     val safePadding = rememberSafePadding()
 
     val paddingStart = safePadding.start + MaterialTheme.spacings.default
@@ -96,6 +132,12 @@ private fun SeasonScreenLayout(state: SeasonState, onAction: (SeasonAction) -> U
     val paddingBottom = safePadding.bottom + MaterialTheme.spacings.default
 
     val lazyListState = rememberLazyListState()
+    val displayedEpisodes =
+        if (state.showOnlyDownloaded) {
+            state.episodes.filter { it.isDownloaded() }
+        } else {
+            state.episodes
+        }
 
     Box(modifier = Modifier.fillMaxSize()) {
         state.season?.let { season ->
@@ -167,7 +209,43 @@ private fun SeasonScreenLayout(state: SeasonState, onAction: (SeasonAction) -> U
                         canPlay = state.episodes.isNotEmpty(),
                     )
                 }
-                items(items = state.episodes, key = { episode -> episode.id }) { episode ->
+                if (state.downloadedCount > 0) {
+                    item(key = "downloaded_filter") {
+                        Row(
+                            modifier = Modifier.padding(start = paddingStart, end = paddingEnd),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FilterChip(
+                                selected = !state.showOnlyDownloaded,
+                                onClick = { onToggleDownloadedFilter(false) },
+                                label = {
+                                    Text(
+                                        text =
+                                            "${stringResource(FilmR.string.all_episodes)} (${state.episodes.size})"
+                                    )
+                                },
+                            )
+                            FilterChip(
+                                selected = state.showOnlyDownloaded,
+                                onClick = { onToggleDownloadedFilter(true) },
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(CoreR.drawable.ic_download),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text =
+                                            "${stringResource(FilmR.string.downloaded_only)} (${state.downloadedCount})"
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+                items(items = displayedEpisodes, key = { episode -> episode.id }) { episode ->
                     EpisodeCard(
                         episode = episode,
                         onClick = { onAction(SeasonAction.NavigateToItem(episode)) },
@@ -175,7 +253,7 @@ private fun SeasonScreenLayout(state: SeasonState, onAction: (SeasonAction) -> U
                     )
                 }
             }
-        } ?: run { CircularProgressIndicator(modifier = Modifier.align(Alignment.Center)) }
+        } ?: run { JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center)) }
 
         ItemTopBar(
             hasBackButton = true,
@@ -204,5 +282,5 @@ private fun SeasonScreenLayout(state: SeasonState, onAction: (SeasonAction) -> U
 @PreviewScreenSizes
 @Composable
 private fun SeasonScreenLayoutPreview() {
-    FindroidTheme { SeasonScreenLayout(state = SeasonState(season = dummySeason), onAction = {}) }
+    JellyxTheme { SeasonScreenLayout(state = SeasonState(season = dummySeason), onAction = {}) }
 }

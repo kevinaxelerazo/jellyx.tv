@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,7 +26,7 @@ import dev.jdtech.jellyfin.core.presentation.dummy.dummySeason
 import dev.jdtech.jellyfin.film.presentation.season.SeasonAction
 import dev.jdtech.jellyfin.film.presentation.season.SeasonState
 import dev.jdtech.jellyfin.film.presentation.season.SeasonViewModel
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.ui.components.EpisodeCard
 import java.util.UUID
@@ -85,14 +86,14 @@ private fun SeasonScreenLayout(state: SeasonState, onAction: (SeasonAction) -> U
                     }
                 }
             }
-        } ?: run { CircularProgressIndicator(modifier = Modifier.align(Alignment.Center)) }
+        } ?: run { JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center)) }
     }
 }
 
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun SeasonScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         SeasonScreenLayout(
             state = SeasonState(season = dummySeason, episodes = dummyEpisodes),
             onAction = {},

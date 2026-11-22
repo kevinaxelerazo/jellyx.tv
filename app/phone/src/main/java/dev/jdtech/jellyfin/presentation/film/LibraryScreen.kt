@@ -1,6 +1,7 @@
 package dev.jdtech.jellyfin.presentation.film
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -27,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
@@ -40,18 +42,19 @@ import androidx.paging.PagingData
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import dev.jdtech.jellyfin.core.R as CoreR
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyMovies
 import dev.jdtech.jellyfin.film.presentation.library.LibraryAction
 import dev.jdtech.jellyfin.film.presentation.library.LibraryState
 import dev.jdtech.jellyfin.film.presentation.library.LibraryViewModel
 import dev.jdtech.jellyfin.models.CollectionType
-import dev.jdtech.jellyfin.models.FindroidItem
+import dev.jdtech.jellyfin.models.JellyxItem
 import dev.jdtech.jellyfin.presentation.components.ErrorDialog
 import dev.jdtech.jellyfin.presentation.film.components.Direction
 import dev.jdtech.jellyfin.presentation.film.components.ErrorCard
 import dev.jdtech.jellyfin.presentation.film.components.ItemCard
 import dev.jdtech.jellyfin.presentation.film.components.SortByDialog
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.presentation.utils.GridCellsAdaptiveWithMinColumns
 import dev.jdtech.jellyfin.presentation.utils.plus
@@ -64,7 +67,7 @@ fun LibraryScreen(
     libraryId: UUID,
     libraryName: String,
     libraryType: CollectionType,
-    onItemClick: (item: FindroidItem) -> Unit,
+    onItemClick: (item: JellyxItem) -> Unit,
     navigateBack: () -> Unit,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
@@ -138,30 +141,35 @@ private fun LibraryScreenLayout(
             )
         },
     ) { innerPadding ->
-        Column {
-            ErrorGroup(
-                loadStates = items.loadState,
-                onRefresh = { items.refresh() },
-                modifier = Modifier.fillMaxWidth().padding(contentPadding + innerPadding),
-            )
-            LazyVerticalGrid(
-                columns = GridCellsAdaptiveWithMinColumns(minSize = 160.dp, minColumns = 2),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = contentPadding + innerPadding,
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacings.default),
-                verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacings.default),
-            ) {
-                items(count = items.itemCount, key = items.itemKey { it.id }) {
-                    val item = items[it]
-                    item?.let { item ->
-                        ItemCard(
-                            item = item,
-                            direction = Direction.VERTICAL,
-                            onClick = { onAction(LibraryAction.OnItemClick(item)) },
-                            modifier = Modifier.animateItem(),
-                        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column {
+                ErrorGroup(
+                    loadStates = items.loadState,
+                    onRefresh = { items.refresh() },
+                    modifier = Modifier.fillMaxWidth().padding(contentPadding + innerPadding),
+                )
+                LazyVerticalGrid(
+                    columns = GridCellsAdaptiveWithMinColumns(minSize = 160.dp, minColumns = 2),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = contentPadding + innerPadding,
+                    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacings.default),
+                    verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacings.default),
+                ) {
+                    items(count = items.itemCount, key = items.itemKey { it.id }) {
+                        val item = items[it]
+                        item?.let { item ->
+                            ItemCard(
+                                item = item,
+                                direction = Direction.VERTICAL,
+                                onClick = { onAction(LibraryAction.OnItemClick(item)) },
+                                modifier = Modifier.animateItem(),
+                            )
+                        }
                     }
                 }
+            }
+            if (items.loadState.refresh is LoadState.Loading && items.itemCount == 0) {
+                JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center))
             }
         }
     }
@@ -215,8 +223,8 @@ private fun ErrorGroup(
 @PreviewScreenSizes
 @Composable
 private fun LibraryScreenLayoutPreview() {
-    val items: Flow<PagingData<FindroidItem>> = flowOf(PagingData.from(dummyMovies))
-    FindroidTheme {
+    val items: Flow<PagingData<JellyxItem>> = flowOf(PagingData.from(dummyMovies))
+    JellyxTheme {
         LibraryScreenLayout(
             libraryName = "Movies",
             state = LibraryState(items = items),

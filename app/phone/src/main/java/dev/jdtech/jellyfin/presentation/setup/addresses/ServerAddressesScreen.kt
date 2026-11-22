@@ -44,7 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyServerAddress
 import dev.jdtech.jellyfin.models.ServerAddress
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.presentation.utils.rememberSafePadding
 import dev.jdtech.jellyfin.setup.R as SetupR
@@ -178,7 +178,7 @@ fun ServerAddressesLayout(state: ServerAddressesState, onAction: (ServerAddresse
 @PreviewScreenSizes
 @Composable
 private fun ServerAddressesLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         ServerAddressesLayout(
             state = ServerAddressesState(addresses = listOf(dummyServerAddress)),
             onAction = {},

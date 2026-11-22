@@ -26,16 +26,18 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
+import dev.jdtech.jellyfin.core.presentation.components.RatingsRow
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyMovie
 import dev.jdtech.jellyfin.film.presentation.home.HomeAction
-import dev.jdtech.jellyfin.models.FindroidItem
-import dev.jdtech.jellyfin.models.FindroidMovie
-import dev.jdtech.jellyfin.models.FindroidShow
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.models.JellyxMovie
+import dev.jdtech.jellyfin.models.JellyxShow
+import dev.jdtech.jellyfin.models.toNativeRatings
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
 @Composable
-fun HomeCarouselItem(item: FindroidItem, onAction: (HomeAction) -> Unit) {
+fun HomeCarouselItem(item: JellyxItem, onAction: (HomeAction) -> Unit) {
     val colorStops =
         arrayOf(
             0.0f to Color.Black.copy(alpha = 0.1f),
@@ -75,8 +77,8 @@ fun HomeCarouselItem(item: FindroidItem, onAction: (HomeAction) -> Unit) {
             ) {
                 val genres =
                     when (item) {
-                        is FindroidMovie -> item.genres
-                        is FindroidShow -> item.genres
+                        is JellyxMovie -> item.genres
+                        is JellyxShow -> item.genres
                         else -> emptyList()
                     }
                 Text(
@@ -94,6 +96,7 @@ fun HomeCarouselItem(item: FindroidItem, onAction: (HomeAction) -> Unit) {
                     maxLines = 2,
                     style = MaterialTheme.typography.titleLarge,
                 )
+                RatingsRow(ratings = item.toNativeRatings(), textColor = Color.White)
                 Text(
                     text = item.overview,
                     modifier = Modifier.width(640.dp),
@@ -110,5 +113,5 @@ fun HomeCarouselItem(item: FindroidItem, onAction: (HomeAction) -> Unit) {
 @Composable
 @Preview(showBackground = true)
 private fun HomeCarouselItemPreview() {
-    FindroidTheme { HomeCarouselItem(item = dummyMovie, onAction = {}) }
+    JellyxTheme { HomeCarouselItem(item = dummyMovie, onAction = {}) }
 }

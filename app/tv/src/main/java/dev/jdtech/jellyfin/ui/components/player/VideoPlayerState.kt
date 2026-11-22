@@ -1,5 +1,6 @@
 package dev.jdtech.jellyfin.ui.components.player
 
+import android.os.SystemClock
 import androidx.annotation.IntRange
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,10 +20,20 @@ internal constructor(@param:IntRange(from = 0) private val hideSeconds: Int) {
     val controlsVisible
         get() = _controlsVisible
 
+    private var lastHiddenUptimeMs: Long = 0L
+
     fun showControls(seconds: Int = hideSeconds) {
         _controlsVisible = true
         channel.trySend(seconds)
     }
+
+    fun hideControls() {
+        lastHiddenUptimeMs = SystemClock.uptimeMillis()
+        _controlsVisible = false
+    }
+
+    fun wasRecentlyHidden(windowMs: Long = 450L): Boolean =
+        SystemClock.uptimeMillis() - lastHiddenUptimeMs < windowMs
 
     private val channel = Channel<Int>(CONFLATED)
 
@@ -33,7 +44,7 @@ internal constructor(@param:IntRange(from = 0) private val hideSeconds: Int) {
 }
 
 @Composable
-fun rememberVideoPlayerState(@IntRange(from = 0) hideSeconds: Int = 2) = remember {
+fun rememberVideoPlayerState(@IntRange(from = 0) hideSeconds: Int = 5) = remember {
     VideoPlayerState(hideSeconds = hideSeconds)
 }
     .also { LaunchedEffect(it) { it.observe() } }

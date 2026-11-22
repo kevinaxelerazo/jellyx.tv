@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,7 +29,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.jdtech.jellyfin.core.R as CoreR
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.presentation.utils.LocalOfflineMode
 
@@ -119,7 +119,7 @@ fun HomeHeader(
                             }
                             isLoading -> {
                                 Box(modifier = Modifier.size(32.dp).align(Alignment.Center)) {
-                                    CircularProgressIndicator()
+                                    JellyxLoadingLogo(size = 32.dp)
                                 }
                             }
                         }
@@ -171,7 +171,7 @@ fun HomeHeader(
 @Composable
 @Preview(showBackground = true)
 private fun HomeHeaderLoadingPreview() {
-    FindroidTheme {
+    JellyxTheme {
         HomeHeader(
             serverName = "Jellyfin",
             isLoading = true,
@@ -188,7 +188,7 @@ private fun HomeHeaderLoadingPreview() {
 @Composable
 @Preview(showBackground = true)
 private fun HomeHeaderErrorPreview() {
-    FindroidTheme {
+    JellyxTheme {
         HomeHeader(
             serverName = "Jellyfin",
             isLoading = false,

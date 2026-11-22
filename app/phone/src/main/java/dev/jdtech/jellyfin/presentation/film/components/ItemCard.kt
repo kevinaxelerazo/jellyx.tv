@@ -23,18 +23,19 @@ import androidx.compose.ui.unit.dp
 import dev.jdtech.jellyfin.core.R
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyEpisode
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyMovie
-import dev.jdtech.jellyfin.models.FindroidEpisode
-import dev.jdtech.jellyfin.models.FindroidItem
-import dev.jdtech.jellyfin.models.FindroidSeason
+import dev.jdtech.jellyfin.models.JellyxEpisode
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.models.JellyxSeason
 import dev.jdtech.jellyfin.models.isDownloaded
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.models.isDownloading
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
 @Composable
 fun ItemCard(
-    item: FindroidItem,
+    item: JellyxItem,
     direction: Direction,
-    onClick: (FindroidItem) -> Unit,
+    onClick: (JellyxItem) -> Unit,
     modifier: Modifier = Modifier,
     showSeriesName: Boolean = false,
 ) {
@@ -58,14 +59,29 @@ fun ItemCard(
                         Modifier.align(Alignment.TopEnd).padding(MaterialTheme.spacings.small),
                     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacings.small),
                 ) {
-                    if (item.isDownloaded()) DownloadedBadge()
                     if (item.played) PlayedBadge()
                     item.unplayedItemCount?.takeIf { it > 0 }?.let { ItemCountBadge(it) }
                 }
+                when {
+                    item.isDownloading() ->
+                        DownloadingPieBadge(
+                            modifier =
+                                Modifier.align(Alignment.BottomEnd)
+                                    .padding(MaterialTheme.spacings.small)
+                        )
+                    item.isDownloaded() ->
+                        DownloadedBadge(
+                            modifier =
+                                Modifier.align(Alignment.BottomEnd)
+                                    .padding(MaterialTheme.spacings.small)
+                        )
+                }
                 if (direction == Direction.HORIZONTAL) {
+                    val progressWidth =
+                        if (item.isDownloaded() || item.isDownloading()) width - 36 else width
                     ProgressBar(
                         item = item,
-                        width = width,
+                        width = progressWidth,
                         modifier =
                             Modifier.align(Alignment.BottomStart)
                                 .padding(MaterialTheme.spacings.small),
@@ -76,20 +92,20 @@ fun ItemCard(
         Spacer(modifier = Modifier.height(MaterialTheme.spacings.extraSmall))
         val title =
             when (item) {
-                is FindroidEpisode -> item.seriesName
-                is FindroidSeason -> if (showSeriesName) item.seriesName else item.name
+                is JellyxEpisode -> item.seriesName
+                is JellyxSeason -> if (showSeriesName) item.seriesName else item.name
                 else -> item.name
             }
         val subtitle =
             when (item) {
-                is FindroidEpisode ->
+                is JellyxEpisode ->
                     stringResource(
                         id = R.string.episode_name_extended,
                         item.parentIndexNumber,
                         item.indexNumber,
                         item.name,
                     )
-                is FindroidSeason -> if (showSeriesName) item.name else null
+                is JellyxSeason -> if (showSeriesName) item.name else null
                 else -> null
             }
         Text(
@@ -114,23 +130,23 @@ fun ItemCard(
 @Preview(showBackground = true)
 @Composable
 private fun ItemCardPreviewMovie() {
-    FindroidTheme { ItemCard(item = dummyMovie, direction = Direction.HORIZONTAL, onClick = {}) }
+    JellyxTheme { ItemCard(item = dummyMovie, direction = Direction.HORIZONTAL, onClick = {}) }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun ItemCardPreviewMovieVertical() {
-    FindroidTheme { ItemCard(item = dummyMovie, direction = Direction.VERTICAL, onClick = {}) }
+    JellyxTheme { ItemCard(item = dummyMovie, direction = Direction.VERTICAL, onClick = {}) }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun ItemCardPreviewEpisode() {
-    FindroidTheme { ItemCard(item = dummyEpisode, direction = Direction.HORIZONTAL, onClick = {}) }
+    JellyxTheme { ItemCard(item = dummyEpisode, direction = Direction.HORIZONTAL, onClick = {}) }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun ItemCardPreviewEpisodeVertical() {
-    FindroidTheme { ItemCard(item = dummyEpisode, direction = Direction.VERTICAL, onClick = {}) }
+    JellyxTheme { ItemCard(item = dummyEpisode, direction = Direction.VERTICAL, onClick = {}) }
 }

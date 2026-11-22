@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -40,13 +41,13 @@ import dev.jdtech.jellyfin.core.presentation.dummy.dummyPersonDetail
 import dev.jdtech.jellyfin.film.presentation.person.PersonAction
 import dev.jdtech.jellyfin.film.presentation.person.PersonState
 import dev.jdtech.jellyfin.film.presentation.person.PersonViewModel
-import dev.jdtech.jellyfin.models.FindroidItem
-import dev.jdtech.jellyfin.models.FindroidPerson
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.models.JellyxPerson
 import dev.jdtech.jellyfin.presentation.film.components.Direction
 import dev.jdtech.jellyfin.presentation.film.components.ItemCard
 import dev.jdtech.jellyfin.presentation.film.components.ItemTopBar
 import dev.jdtech.jellyfin.presentation.film.components.OverviewText
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.presentation.utils.rememberSafePadding
 import java.util.UUID
@@ -56,7 +57,7 @@ fun PersonScreen(
     personId: UUID,
     navigateBack: () -> Unit,
     navigateHome: () -> Unit,
-    navigateToItem: (item: FindroidItem) -> Unit,
+    navigateToItem: (item: JellyxItem) -> Unit,
     viewModel: PersonViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -188,7 +189,7 @@ private fun PersonScreenLayout(state: PersonState, onAction: (PersonAction) -> U
 
                 Spacer(Modifier.height(paddingBottom))
             }
-        } ?: run { CircularProgressIndicator(modifier = Modifier.align(Alignment.Center)) }
+        } ?: run { JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center)) }
 
         ItemTopBar(
             hasBackButton = true,
@@ -200,7 +201,7 @@ private fun PersonScreenLayout(state: PersonState, onAction: (PersonAction) -> U
 }
 
 @Composable
-private fun PersonImage(person: FindroidPerson, modifier: Modifier = Modifier) {
+private fun PersonImage(person: JellyxPerson, modifier: Modifier = Modifier) {
     AsyncImage(
         model = person.images.primary,
         contentDescription = null,
@@ -217,7 +218,7 @@ private fun PersonImage(person: FindroidPerson, modifier: Modifier = Modifier) {
 @PreviewScreenSizes
 @Composable
 private fun PersonScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         PersonScreenLayout(
             state = PersonState(person = dummyPersonDetail, starredInMovies = dummyMovies),
             onAction = {},

@@ -37,7 +37,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.settings.R as SettingsR
 import dev.jdtech.jellyfin.setup.R as SetupR
@@ -180,7 +180,7 @@ private fun PermissionScreenLayout(
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun PermissionScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         PermissionScreenLayout(
             title = SettingsR.string.permission_local_network,
             rationale = SettingsR.string.permission_local_network_rationale,

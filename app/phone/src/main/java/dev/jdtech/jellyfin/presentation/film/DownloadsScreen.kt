@@ -24,19 +24,20 @@ import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jdtech.jellyfin.core.R as CoreR
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyMovies
 import dev.jdtech.jellyfin.film.presentation.collection.CollectionAction
 import dev.jdtech.jellyfin.film.presentation.collection.CollectionState
 import dev.jdtech.jellyfin.film.presentation.downloads.DownloadsViewModel
 import dev.jdtech.jellyfin.models.CollectionSection
-import dev.jdtech.jellyfin.models.FindroidItem
+import dev.jdtech.jellyfin.models.JellyxItem
 import dev.jdtech.jellyfin.models.UiText
 import dev.jdtech.jellyfin.presentation.film.components.CollectionGrid
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 
 @Composable
 fun DownloadsScreen(
-    onItemClick: (item: FindroidItem) -> Unit,
+    onItemClick: (item: JellyxItem) -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -74,7 +75,9 @@ private fun DownloadsScreenLayout(state: CollectionState, onAction: (CollectionA
         contentWindowInsets = WindowInsets.statusBars.union(WindowInsets.displayCutout),
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            if (state.sections.isEmpty()) {
+            if (state.isLoading && state.sections.isEmpty()) {
+                JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center))
+            } else if (!state.isLoading && state.sections.isEmpty()) {
                 Text(
                     text = stringResource(CoreR.string.no_downloads),
                     modifier = Modifier.align(Alignment.Center),
@@ -90,7 +93,7 @@ private fun DownloadsScreenLayout(state: CollectionState, onAction: (CollectionA
 @PreviewScreenSizes
 @Composable
 private fun DownloadsScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         DownloadsScreenLayout(
             state =
                 CollectionState(

@@ -9,13 +9,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,12 +37,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.tv.material3.Button
 import androidx.tv.material3.Icon
-import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyDiscoveredServer
 import dev.jdtech.jellyfin.presentation.setup.components.DiscoveredServerItem
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.setup.R
 import dev.jdtech.jellyfin.setup.presentation.addserver.AddServerAction
@@ -149,9 +147,9 @@ private fun AddServerScreenLayout(state: AddServerState, onAction: (AddServerAct
                 ) {
                     Box(modifier = Modifier.fillMaxWidth()) {
                         if (state.isLoading) {
-                            CircularProgressIndicator(
-                                color = LocalContentColor.current,
-                                modifier = Modifier.size(24.dp).align(Alignment.CenterStart),
+                            JellyxLoadingLogo(
+                                size = 22.dp,
+                                modifier = Modifier.align(Alignment.CenterStart),
                             )
                         }
                         Text(
@@ -168,13 +166,13 @@ private fun AddServerScreenLayout(state: AddServerState, onAction: (AddServerAct
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun AddServerScreenLayoutPreview() {
-    FindroidTheme { AddServerScreenLayout(state = AddServerState(), onAction = {}) }
+    JellyxTheme { AddServerScreenLayout(state = AddServerState(), onAction = {}) }
 }
 
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun AddServerScreenLayoutDiscoveredPreview() {
-    FindroidTheme {
+    JellyxTheme {
         AddServerScreenLayout(
             state = AddServerState(discoveredServers = listOf(dummyDiscoveredServer)),
             onAction = {},

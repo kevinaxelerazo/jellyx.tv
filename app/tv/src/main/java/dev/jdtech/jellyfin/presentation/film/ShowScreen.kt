@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -63,8 +64,8 @@ import dev.jdtech.jellyfin.core.presentation.theme.Yellow
 import dev.jdtech.jellyfin.film.presentation.show.ShowAction
 import dev.jdtech.jellyfin.film.presentation.show.ShowState
 import dev.jdtech.jellyfin.film.presentation.show.ShowViewModel
-import dev.jdtech.jellyfin.models.FindroidItem
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.ui.components.Direction
 import dev.jdtech.jellyfin.ui.components.ItemCard
@@ -74,7 +75,7 @@ import java.util.UUID
 @Composable
 fun ShowScreen(
     showId: UUID,
-    navigateToItem: (item: FindroidItem) -> Unit,
+    navigateToItem: (item: JellyxItem) -> Unit,
     navigateToPlayer: (itemId: UUID) -> Unit,
     viewModel: ShowViewModel = hiltViewModel(),
 ) {
@@ -228,8 +229,6 @@ private fun ShowScreenLayout(state: ShowState, onAction: (ShowAction) -> Unit) {
                             Text(
                                 text = show.overview,
                                 style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 4,
-                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.width(640.dp),
                             )
                             Spacer(modifier = Modifier.height(MaterialTheme.spacings.default))
@@ -386,14 +385,14 @@ private fun ShowScreenLayout(state: ShowState, onAction: (ShowAction) -> Unit) {
             }
 
             LaunchedEffect(true) { focusRequester.requestFocus() }
-        } ?: run { CircularProgressIndicator(modifier = Modifier.align(Alignment.Center)) }
+        } ?: run { JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center)) }
     }
 }
 
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun ShowScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         ShowScreenLayout(state = ShowState(show = dummyShow, nextUp = dummyEpisode), onAction = {})
     }
 }

@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import dev.jdtech.jellyfin.core.R as CoreR
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 
 @Composable
 fun DeleteDownloadDialog(onDelete: () -> Unit, onDismiss: () -> Unit) {
@@ -29,5 +29,5 @@ fun DeleteDownloadDialog(onDelete: () -> Unit, onDismiss: () -> Unit) {
 @Composable
 @Preview
 private fun CancelDownloadDialogPreview() {
-    FindroidTheme { DeleteDownloadDialog(onDelete = {}, onDismiss = {}) }
+    JellyxTheme { DeleteDownloadDialog(onDelete = {}, onDismiss = {}) }
 }

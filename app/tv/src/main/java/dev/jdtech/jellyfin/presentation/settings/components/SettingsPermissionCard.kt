@@ -38,7 +38,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import dev.jdtech.jellyfin.core.R as CoreR
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.settings.R as SettingsR
 import dev.jdtech.jellyfin.settings.domain.models.PermissionDefinitions
@@ -160,7 +160,7 @@ fun SettingsPermissionCard(
 @Preview
 @Composable
 private fun SettingsPermissionCardPreview() {
-    FindroidTheme {
+    JellyxTheme {
         SettingsPermissionCard(
             preference = PreferencePermission(permission = PermissionDefinitions.localNetwork)
         )

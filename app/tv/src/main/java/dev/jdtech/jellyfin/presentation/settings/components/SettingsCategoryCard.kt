@@ -24,7 +24,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.settings.R as SettingsR
 import dev.jdtech.jellyfin.settings.presentation.models.PreferenceCategory
@@ -82,7 +82,7 @@ fun SettingsCategoryCard(preference: PreferenceCategory, modifier: Modifier = Mo
 @Preview
 @Composable
 private fun SettingsCategoryCardPreview() {
-    FindroidTheme {
+    JellyxTheme {
         SettingsCategoryCard(
             preference =
                 PreferenceCategory(

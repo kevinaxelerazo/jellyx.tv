@@ -22,7 +22,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.jdtech.jellyfin.core.R as CoreR
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -69,5 +69,5 @@ fun UserItem(
 @Composable
 @Preview(showBackground = true)
 private fun UserItemPreview() {
-    FindroidTheme { UserItem(name = "Bob", modifier = Modifier.width(240.dp)) }
+    JellyxTheme { UserItem(name = "Bob", modifier = Modifier.width(240.dp)) }
 }

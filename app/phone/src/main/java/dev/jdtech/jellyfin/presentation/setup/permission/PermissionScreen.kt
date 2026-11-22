@@ -37,7 +37,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jdtech.jellyfin.presentation.setup.components.RootLayout
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.settings.R as SettingsR
 import dev.jdtech.jellyfin.setup.R as SetupR
 import dev.jdtech.jellyfin.setup.presentation.permission.PermissionAction
@@ -177,7 +177,7 @@ private fun PermissionScreenLayout(
 @PreviewScreenSizes
 @Composable
 private fun PermissionScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         PermissionScreenLayout(
             title = SettingsR.string.permission_local_network,
             rationale = SettingsR.string.permission_local_network_rationale,

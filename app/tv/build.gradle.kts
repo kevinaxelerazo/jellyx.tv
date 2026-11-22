@@ -15,16 +15,24 @@ android {
     buildToolsVersion = Versions.BUILD_TOOLS
 
     defaultConfig {
-        applicationId = "dev.jdtech.jellyfin"
+        applicationId = "tv.jellyx.app.tv"
         minSdk = Versions.MIN_SDK
         targetSdk = Versions.TARGET_SDK
 
         versionCode = Versions.APP_CODE
         versionName = Versions.APP_NAME
+        resValue("string", "search_suggest_authority", "tv.jellyx.app.tv.search")
+
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
     }
 
     buildTypes {
-        named("debug") { applicationIdSuffix = ".debug" }
+        named("debug") {
+            applicationIdSuffix = ".debug"
+            resValue("string", "search_suggest_authority", "tv.jellyx.app.tv.debug.search")
+        }
         named("release") {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -36,6 +44,7 @@ android {
         register("staging") {
             initWith(getByName("release"))
             applicationIdSuffix = ".staging"
+            resValue("string", "search_suggest_authority", "tv.jellyx.app.tv.staging.search")
         }
     }
 
@@ -47,27 +56,14 @@ android {
         }
     }
 
-    splits {
-        abi {
-            // Detect app bundle and conditionally disable split abis
-            // This is needed due to a "Multiple shrunk-resources files found in directory" error
-            // present since AGP 8.9.0, for more info see:
-            // https://issuetracker.google.com/issues/402800800
-            val isBuildingBundle =
-                gradle.startParameter.taskNames.any { it.lowercase().contains("bundle") }
-            isEnable = !isBuildingBundle
-
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-        }
-    }
-
     buildFeatures {
         buildConfig = true
         compose = true
     }
 
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+
+    buildFeatures { resValues = true }
 
     dependenciesInfo {
         // Disables dependency metadata when building APKs.
@@ -92,7 +88,9 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.core)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.hilt.work)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.work)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.session)
@@ -103,6 +101,7 @@ dependencies {
     implementation(libs.androidx.savedstate.compose)
     implementation(libs.androidx.paging.compose)
     implementation(libs.androidx.tv.material)
+    implementation(libs.androidx.tvprovider)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.coil.network.cache.control)

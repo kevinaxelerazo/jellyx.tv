@@ -32,16 +32,16 @@ import androidx.window.core.layout.WindowSizeClass
 import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.core.presentation.downloader.DownloaderState
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyEpisode
-import dev.jdtech.jellyfin.models.FindroidItem
-import dev.jdtech.jellyfin.models.FindroidMovie
-import dev.jdtech.jellyfin.models.FindroidShow
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.models.JellyxMovie
+import dev.jdtech.jellyfin.models.JellyxShow
 import dev.jdtech.jellyfin.models.isDownloaded
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
 @Composable
 fun ItemButtonsBar(
-    item: FindroidItem,
+    item: JellyxItem,
     onPlayClick: (startFromBeginning: Boolean) -> Unit,
     onMarkAsPlayedClick: () -> Unit,
     onMarkAsFavoriteClick: () -> Unit,
@@ -58,10 +58,10 @@ fun ItemButtonsBar(
 
     val trailerUri =
         when (item) {
-            is FindroidMovie -> {
+            is JellyxMovie -> {
                 item.trailer
             }
-            is FindroidShow -> {
+            is JellyxShow -> {
                 item.trailer
             }
             else -> null
@@ -164,13 +164,8 @@ fun ItemButtonsBar(
                     } else if (item.canDownload) {
                         FilledTonalIconButton(
                             onClick = {
-                                storageLocations = context.getExternalFilesDirs(null)
-                                if (storageLocations.size > 1) {
-                                    storageSelectionDialogOpen = true
-                                } else {
-                                    selectedStorageIndex = 0
-                                    onDownloadClick(selectedStorageIndex)
-                                }
+                                selectedStorageIndex = 0
+                                onDownloadClick(selectedStorageIndex)
                             }
                         ) {
                             Icon(
@@ -241,7 +236,7 @@ fun ItemButtonsBar(
 @Preview(showBackground = true)
 @Composable
 private fun ItemButtonsBarPreview() {
-    FindroidTheme {
+    JellyxTheme {
         ItemButtonsBar(
             item = dummyEpisode,
             onPlayClick = {},
@@ -258,7 +253,7 @@ private fun ItemButtonsBarPreview() {
 @Preview(showBackground = true)
 @Composable
 private fun ItemButtonsBarDownloadingPreview() {
-    FindroidTheme {
+    JellyxTheme {
         ItemButtonsBar(
             item = dummyEpisode,
             downloaderState =

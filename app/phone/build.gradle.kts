@@ -1,5 +1,3 @@
-import com.android.build.api.variant.FilterConfiguration
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose.compiler)
@@ -19,7 +17,7 @@ android {
     buildToolsVersion = Versions.BUILD_TOOLS
 
     defaultConfig {
-        applicationId = "dev.jdtech.jellyfin"
+        applicationId = "tv.jellyx.app.mobile"
         minSdk = Versions.MIN_SDK
         targetSdk = Versions.TARGET_SDK
 
@@ -27,6 +25,10 @@ android {
         versionName = Versions.APP_NAME
 
         testInstrumentationRunner = "dev.jdtech.jellyfin.HiltTestRunner"
+
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -53,21 +55,6 @@ android {
         }
     }
 
-    splits {
-        abi {
-            // Detect app bundle and conditionally disable split abis
-            // This is needed due to a "Multiple shrunk-resources files found in directory" error
-            // present since AGP 8.9.0, for more info see:
-            // https://issuetracker.google.com/issues/402800800
-            val isBuildingBundle =
-                gradle.startParameter.taskNames.any { it.lowercase().contains("bundle") }
-            isEnable = !isBuildingBundle
-
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-        }
-    }
-
     buildFeatures {
         buildConfig = true
         viewBinding = true
@@ -79,20 +66,6 @@ android {
         includeInApk = false
         // Disables dependency metadata when building Android App Bundles.
         includeInBundle = false
-    }
-}
-
-androidComponents {
-    onVariants(selector().withBuildType("release")) { variant ->
-        variant.outputs.forEach { output ->
-            val abi =
-                output.filters
-                    .firstOrNull { it.filterType == FilterConfiguration.FilterType.ABI }
-                    ?.identifier
-            output.outputFileName.set(
-                "findroid-v${output.versionName.get()}-${variant.flavorName}-$abi.apk"
-            )
-        }
     }
 }
 

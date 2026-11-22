@@ -31,7 +31,7 @@ import androidx.tv.material3.Text
 import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.player.core.domain.models.Track
 import dev.jdtech.jellyfin.player.local.R as PlayerLocalR
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import kotlinx.parcelize.Parcelize
 
@@ -43,7 +43,7 @@ data class VideoPlayerTrackSelectorDialogResult(val trackType: @C.TrackType Int,
 fun VideoPlayerTrackSelectorDialog(
     trackType: @C.TrackType Int,
     tracks: Array<Track>,
-    // resultNavigator: ResultBackNavigator<VideoPlayerTrackSelectorDialogResult>,
+    onTrackSelected: (Int) -> Unit = {},
 ) {
     val dialogTitle =
         when (trackType) {
@@ -67,10 +67,7 @@ fun VideoPlayerTrackSelectorDialog(
             ) {
                 items(tracks) { track ->
                     Surface(
-                        onClick = {
-                            // resultNavigator.navigateBack(result =
-                            // VideoPlayerTrackSelectorDialogResult(trackType, track.id))
-                        },
+                        onClick = { onTrackSelected(track.id) },
                         enabled = track.supported,
                         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(4.dp)),
                         colors =
@@ -114,7 +111,7 @@ fun VideoPlayerTrackSelectorDialog(
 @Preview
 @Composable
 private fun VideoPlayerTrackSelectorDialogPreview() {
-    FindroidTheme {
+    JellyxTheme {
         VideoPlayerTrackSelectorDialog(
             trackType = C.TRACK_TYPE_AUDIO,
             tracks =

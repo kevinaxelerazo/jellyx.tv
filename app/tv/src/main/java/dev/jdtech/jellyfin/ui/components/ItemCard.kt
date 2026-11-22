@@ -27,17 +27,17 @@ import androidx.tv.material3.Text
 import dev.jdtech.jellyfin.core.R
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyEpisode
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyMovie
-import dev.jdtech.jellyfin.models.FindroidEpisode
-import dev.jdtech.jellyfin.models.FindroidItem
-import dev.jdtech.jellyfin.models.FindroidSeason
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.models.JellyxEpisode
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.models.JellyxSeason
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
 @Composable
 fun ItemCard(
-    item: FindroidItem,
+    item: JellyxItem,
     direction: Direction,
-    onClick: (FindroidItem) -> Unit,
+    onClick: (JellyxItem) -> Unit,
     modifier: Modifier = Modifier,
     showSeriesName: Boolean = false,
 ) {
@@ -53,7 +53,10 @@ fun ItemCard(
             border =
                 ClickableSurfaceDefaults.border(
                     focusedBorder =
-                        Border(BorderStroke(4.dp, Color.White), shape = RoundedCornerShape(10.dp))
+                        Border(
+                            BorderStroke(4.dp, MaterialTheme.colorScheme.primary),
+                            shape = RoundedCornerShape(10.dp),
+                        )
                 ),
             scale = ClickableSurfaceScale.None,
         ) {
@@ -64,7 +67,11 @@ fun ItemCard(
                     modifier =
                         Modifier.align(Alignment.TopEnd).padding(MaterialTheme.spacings.small),
                 )
-                if (direction == Direction.HORIZONTAL) {
+                if (
+                    direction == Direction.HORIZONTAL &&
+                        item.playbackPositionTicks > 0 &&
+                        item.runtimeTicks > 0
+                ) {
                     Column(
                         modifier =
                             Modifier.align(Alignment.BottomStart)
@@ -89,20 +96,20 @@ fun ItemCard(
         Spacer(modifier = Modifier.height(MaterialTheme.spacings.small))
         val title =
             when (item) {
-                is FindroidEpisode -> item.seriesName
-                is FindroidSeason -> if (showSeriesName) item.seriesName else item.name
+                is JellyxEpisode -> item.seriesName
+                is JellyxSeason -> if (showSeriesName) item.seriesName else item.name
                 else -> item.name
             }
         val subtitle =
             when (item) {
-                is FindroidEpisode ->
+                is JellyxEpisode ->
                     stringResource(
                         id = R.string.episode_name_extended,
                         item.parentIndexNumber,
                         item.indexNumber,
                         item.name,
                     )
-                is FindroidSeason -> if (showSeriesName) item.name else null
+                is JellyxSeason -> if (showSeriesName) item.name else null
                 else -> null
             }
         Text(
@@ -126,17 +133,17 @@ fun ItemCard(
 @Preview
 @Composable
 private fun ItemCardPreviewMovie() {
-    FindroidTheme { ItemCard(item = dummyMovie, direction = Direction.HORIZONTAL, onClick = {}) }
+    JellyxTheme { ItemCard(item = dummyMovie, direction = Direction.HORIZONTAL, onClick = {}) }
 }
 
 @Preview
 @Composable
 private fun ItemCardPreviewMovieVertical() {
-    FindroidTheme { ItemCard(item = dummyMovie, direction = Direction.VERTICAL, onClick = {}) }
+    JellyxTheme { ItemCard(item = dummyMovie, direction = Direction.VERTICAL, onClick = {}) }
 }
 
 @Preview
 @Composable
 private fun ItemCardPreviewEpisode() {
-    FindroidTheme { ItemCard(item = dummyEpisode, direction = Direction.HORIZONTAL, onClick = {}) }
+    JellyxTheme { ItemCard(item = dummyEpisode, direction = Direction.HORIZONTAL, onClick = {}) }
 }

@@ -19,12 +19,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.window.core.layout.WindowSizeClass
+import dev.jdtech.jellyfin.core.presentation.components.JellyxLoadingLogo
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyCollections
 import dev.jdtech.jellyfin.film.presentation.media.MediaAction
 import dev.jdtech.jellyfin.film.presentation.media.MediaState
@@ -32,23 +34,25 @@ import dev.jdtech.jellyfin.film.presentation.media.MediaViewModel
 import dev.jdtech.jellyfin.film.presentation.search.SearchAction
 import dev.jdtech.jellyfin.film.presentation.search.SearchState
 import dev.jdtech.jellyfin.film.presentation.search.SearchViewModel
-import dev.jdtech.jellyfin.models.FindroidItem
+import dev.jdtech.jellyfin.models.JellyxItem
 import dev.jdtech.jellyfin.presentation.components.ErrorDialog
 import dev.jdtech.jellyfin.presentation.film.components.Direction
 import dev.jdtech.jellyfin.presentation.film.components.ErrorCard
 import dev.jdtech.jellyfin.presentation.film.components.FavoritesCard
 import dev.jdtech.jellyfin.presentation.film.components.FilmSearchBar
 import dev.jdtech.jellyfin.presentation.film.components.ItemCard
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.presentation.utils.rememberSafePadding
 
 @Composable
 fun MediaScreen(
-    onItemClick: (FindroidItem) -> Unit,
+    onItemClick: (JellyxItem) -> Unit,
     onFavoritesClick: () -> Unit,
     searchExpanded: Boolean,
     onSearchExpand: (Boolean) -> Unit,
+    prefilledSearchQuery: String? = null,
+    onPrefilledSearchQueryConsumed: () -> Unit = {},
     viewModel: MediaViewModel = hiltViewModel(),
     searchViewModel: SearchViewModel = hiltViewModel(),
 ) {
@@ -62,6 +66,8 @@ fun MediaScreen(
         searchState = searchState,
         searchExpanded = searchExpanded,
         onSearchExpand = onSearchExpand,
+        prefilledSearchQuery = prefilledSearchQuery,
+        onPrefilledSearchQueryConsumed = onPrefilledSearchQueryConsumed,
         onAction = { action ->
             when (action) {
                 is MediaAction.OnItemClick -> onItemClick(action.item)
@@ -88,6 +94,8 @@ private fun MediaScreenLayout(
     onSearchExpand: (Boolean) -> Unit,
     onAction: (MediaAction) -> Unit,
     onSearchAction: (SearchAction) -> Unit,
+    prefilledSearchQuery: String? = null,
+    onPrefilledSearchQueryConsumed: () -> Unit = {},
 ) {
     val safePadding = rememberSafePadding(handleStartInsets = false)
 
@@ -128,6 +136,8 @@ private fun MediaScreenLayout(
             modifier = Modifier.fillMaxWidth(),
             paddingStart = paddingStart,
             paddingEnd = paddingEnd,
+            prefilledQuery = prefilledSearchQuery,
+            onPrefilledQueryConsumed = onPrefilledSearchQueryConsumed,
         )
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = minColumnSize),
@@ -154,6 +164,9 @@ private fun MediaScreenLayout(
                 )
             }
         }
+        if (state.isLoading && state.libraries.isEmpty()) {
+            JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center))
+        }
         if (state.error != null) {
             ErrorCard(
                 onShowStacktrace = { showErrorDialog = true },
@@ -179,7 +192,7 @@ private fun MediaScreenLayout(
 @PreviewScreenSizes
 @Composable
 private fun MediaScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         MediaScreenLayout(
             state =
                 MediaState(libraries = dummyCollections, error = Exception("Failed to load data")),

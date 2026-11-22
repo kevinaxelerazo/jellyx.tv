@@ -36,7 +36,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.presentation.settings.components.SettingsGroupCard
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.presentation.utils.plus
 import dev.jdtech.jellyfin.settings.R as SettingsR
@@ -185,7 +185,7 @@ private fun SettingsScreenLayout(
 @PreviewScreenSizes
 @Composable
 private fun SettingsScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         SettingsScreenLayout(
             title = CoreR.string.title_settings,
             state =

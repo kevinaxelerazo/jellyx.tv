@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.core.presentation.downloader.DownloaderState
 import dev.jdtech.jellyfin.models.UiText
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import kotlin.math.roundToInt
 
@@ -117,7 +117,8 @@ fun DownloaderCard(state: DownloaderState, onCancelClick: () -> Unit, onRetryCli
             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
                 when (state.status) {
                     DownloadManager.STATUS_PENDING,
-                    DownloadManager.STATUS_RUNNING -> {
+                    DownloadManager.STATUS_RUNNING,
+                    DownloadManager.STATUS_PAUSED -> {
                         FilledTonalIconButton(onClick = onCancelClick) {
                             Icon(
                                 painter = painterResource(CoreR.drawable.ic_x),
@@ -142,7 +143,7 @@ fun DownloaderCard(state: DownloaderState, onCancelClick: () -> Unit, onRetryCli
 @Composable
 @Preview
 private fun DownloaderCardPendingPreview() {
-    FindroidTheme {
+    JellyxTheme {
         DownloaderCard(
             state = DownloaderState(status = DownloadManager.STATUS_PENDING),
             onCancelClick = {},
@@ -154,7 +155,7 @@ private fun DownloaderCardPendingPreview() {
 @Composable
 @Preview
 private fun DownloaderCardDownloadingPreview() {
-    FindroidTheme {
+    JellyxTheme {
         DownloaderCard(
             state = DownloaderState(status = DownloadManager.STATUS_RUNNING, progress = 0.5f),
             onCancelClick = {},
@@ -166,7 +167,7 @@ private fun DownloaderCardDownloadingPreview() {
 @Composable
 @Preview
 private fun DownloaderCardFailedPreview() {
-    FindroidTheme {
+    JellyxTheme {
         DownloaderCard(
             state =
                 DownloaderState(

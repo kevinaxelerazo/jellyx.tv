@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.dp
 import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.film.R as FilmR
 import dev.jdtech.jellyfin.film.presentation.home.HomeAction
-import dev.jdtech.jellyfin.models.FindroidCollection
-import dev.jdtech.jellyfin.models.FindroidImages
+import dev.jdtech.jellyfin.models.JellyxCollection
+import dev.jdtech.jellyfin.models.JellyxImages
 import dev.jdtech.jellyfin.models.HomeItem
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
@@ -34,33 +34,41 @@ fun HomeView(
     itemsPadding: PaddingValues,
     onAction: (HomeAction) -> Unit,
     modifier: Modifier = Modifier,
+    isOfflineSection: Boolean = false,
 ) {
     Column(modifier = modifier) {
         Box(modifier = Modifier.fillMaxWidth().height(42.dp).padding(itemsPadding)) {
             Text(
-                text = stringResource(FilmR.string.latest_library, view.view.name),
+                text =
+                    if (isOfflineSection) {
+                        view.view.name
+                    } else {
+                        stringResource(FilmR.string.latest_library, view.view.name)
+                    },
                 modifier = Modifier.align(Alignment.CenterStart),
                 style = MaterialTheme.typography.titleMedium,
             )
-            IconButton(
-                onClick = {
-                    onAction(
-                        HomeAction.OnLibraryClick(
-                            FindroidCollection(
-                                id = view.view.id,
-                                name = view.view.name,
-                                images = FindroidImages(),
-                                type = view.view.type,
+            if (!isOfflineSection) {
+                IconButton(
+                    onClick = {
+                        onAction(
+                            HomeAction.OnLibraryClick(
+                                JellyxCollection(
+                                    id = view.view.id,
+                                    name = view.view.name,
+                                    images = JellyxImages(),
+                                    type = view.view.type,
+                                )
                             )
                         )
+                    },
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                ) {
+                    Icon(
+                        painter = painterResource(CoreR.drawable.ic_arrow_right),
+                        contentDescription = null,
                     )
-                },
-                modifier = Modifier.align(Alignment.CenterEnd),
-            ) {
-                Icon(
-                    painter = painterResource(CoreR.drawable.ic_arrow_right),
-                    contentDescription = null,
-                )
+                }
             }
         }
         Spacer(modifier = Modifier.height(MaterialTheme.spacings.extraSmall))

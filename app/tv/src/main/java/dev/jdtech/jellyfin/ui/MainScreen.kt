@@ -2,9 +2,11 @@ package dev.jdtech.jellyfin.ui
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +15,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -24,12 +29,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Tab
@@ -40,11 +50,15 @@ import androidx.tv.material3.Text
 import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyServer
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyUser
+import dev.jdtech.jellyfin.film.presentation.search.DEFAULT_STREAMING_PLATFORM_SHORTCUTS
 import dev.jdtech.jellyfin.models.CollectionType
 import dev.jdtech.jellyfin.models.User
+import dev.jdtech.jellyfin.presentation.film.GenresScreen
 import dev.jdtech.jellyfin.presentation.film.HomeScreen
+import dev.jdtech.jellyfin.presentation.film.LiveTvScreen
 import dev.jdtech.jellyfin.presentation.film.MediaScreen
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.film.SearchScreen
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.ui.components.LoadingIndicator
 import dev.jdtech.jellyfin.ui.components.PillBorderIndicator
@@ -80,7 +94,8 @@ enum class TabDestination(@param:DrawableRes val icon: Int, @param:StringRes val
     Search(CoreR.drawable.ic_search, CoreR.string.search),
     Home(CoreR.drawable.ic_home, CoreR.string.title_home),
     Libraries(CoreR.drawable.ic_library, CoreR.string.libraries),
-    // LiveTV(CoreR.drawable.ic_tv, CoreR.string.live_tv)
+    LiveTV(CoreR.drawable.ic_tv, CoreR.string.live_tv),
+    Genres(CoreR.drawable.ic_genres, CoreR.string.genres),
 }
 
 @Composable
@@ -96,6 +111,7 @@ private fun MainScreenLayout(
     var activeTabIndex by rememberSaveable { mutableIntStateOf(focusedTabIndex) }
 
     var isLoading by remember { mutableStateOf(false) }
+    var prefilledSearchQuery by rememberSaveable { mutableStateOf<String?>(null) }
 
     var user: User? = null
     when (uiState) {
@@ -124,7 +140,7 @@ private fun MainScreenLayout(
                     // FocusedTab's indicator
                     PillBorderIndicator(
                         currentTabPosition = tabPositions[focusedTabIndex],
-                        activeBorderColor = Color.White,
+                        activeBorderColor = MaterialTheme.colorScheme.primary,
                         inactiveBorderColor = Color.Transparent,
                         doesTabRowHaveFocus = isActivated,
                     )
@@ -132,8 +148,8 @@ private fun MainScreenLayout(
                     // SelectedTab's indicator
                     TabRowDefaults.PillIndicator(
                         currentTabPosition = tabPositions[activeTabIndex],
-                        activeColor = Color.White,
-                        inactiveColor = Color.White,
+                        activeColor = MaterialTheme.colorScheme.primary,
+                        inactiveColor = MaterialTheme.colorScheme.primary,
                         doesTabRowHaveFocus = isActivated,
                     )
                 },
@@ -185,7 +201,60 @@ private fun MainScreenLayout(
                 ProfileButton(user = user, onClick = { navigateToSettings() })
             }
         }
+        if (activeTabIndex != 0) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacings.small),
+                contentPadding = PaddingValues(horizontal = MaterialTheme.spacings.default),
+                modifier = Modifier.fillMaxWidth().padding(bottom = MaterialTheme.spacings.small),
+            ) {
+                items(DEFAULT_STREAMING_PLATFORM_SHORTCUTS, key = { it.id }) { platform ->
+                    Button(
+                        onClick = {
+                            prefilledSearchQuery = platform.searchQuery
+                            focusedTabIndex = 0
+                            activeTabIndex = 0
+                        },
+                        colors =
+                            ButtonDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier =
+                                    Modifier.size(20.dp)
+                                        .clip(RoundedCornerShape(5.dp))
+                                        .background(Color(platform.brandColorHex)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = platform.shortBadge,
+                                    color = Color.White,
+                                    fontSize = if (platform.shortBadge.length > 2) 7.sp else 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = platform.label,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
+                    }
+                }
+            }
+        }
         when (activeTabIndex) {
+            0 -> {
+                SearchScreen(
+                    navigateToMovie = navigateToMovie,
+                    navigateToShow = navigateToShow,
+                    isLoading = { isLoading = it },
+                    prefilledQuery = prefilledSearchQuery,
+                    onPrefilledQueryConsumed = { prefilledSearchQuery = null },
+                )
+            }
             1 -> {
                 HomeScreen(
                     navigateToMovie = navigateToMovie,
@@ -197,6 +266,19 @@ private fun MainScreenLayout(
             2 -> {
                 MediaScreen(navigateToLibrary = navigateToLibrary, isLoading = { isLoading = it })
             }
+            3 -> {
+                LiveTvScreen(
+                    navigateToPlayer = navigateToPlayer,
+                    isLoading = { isLoading = it },
+                )
+            }
+            4 -> {
+                GenresScreen(
+                    navigateToMovie = navigateToMovie,
+                    navigateToShow = navigateToShow,
+                    isLoading = { isLoading = it },
+                )
+            }
         }
     }
 }
@@ -204,7 +286,7 @@ private fun MainScreenLayout(
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun MainScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         MainScreenLayout(
             uiState = MainViewModel.UiState.Normal(server = dummyServer, user = dummyUser),
             navigateToSettings = {},

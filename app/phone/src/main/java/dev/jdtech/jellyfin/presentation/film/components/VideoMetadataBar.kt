@@ -19,7 +19,7 @@ import dev.jdtech.jellyfin.core.presentation.dummy.dummyVideoMetadata
 import dev.jdtech.jellyfin.models.AudioCodec
 import dev.jdtech.jellyfin.models.DisplayProfile
 import dev.jdtech.jellyfin.models.VideoMetadata
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
 @Composable
@@ -72,5 +72,5 @@ fun VideoMetadataBarItem(text: String, @DrawableRes icon: Int? = null) {
 @Composable
 @Preview(showBackground = true)
 private fun VideoMetadataBarPreview() {
-    FindroidTheme { VideoMetadataBar(videoMetadata = dummyVideoMetadata) }
+    JellyxTheme { VideoMetadataBar(videoMetadata = dummyVideoMetadata) }
 }

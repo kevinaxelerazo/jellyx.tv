@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.jdtech.jellyfin.core.R as CoreR
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.settings.R as SettingsR
 import dev.jdtech.jellyfin.settings.presentation.settings.SettingsFileEditAction
 import dev.jdtech.jellyfin.settings.presentation.settings.SettingsFileEditViewModel
@@ -157,7 +157,7 @@ private fun SettingsFileEditScreenLayout(
 @Composable
 @PreviewScreenSizes
 private fun SettingsFileEditScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         SettingsFileEditScreenLayout(
             fileName = "mpv.conf",
             initialText = "sample text",

@@ -23,17 +23,21 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.tv.material3.Icon
+import androidx.tv.material3.IconButton
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import dev.jdtech.jellyfin.api.JellyfinApi
+import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyUsers
 import dev.jdtech.jellyfin.presentation.setup.components.UserItem
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.setup.R as SetupR
 import dev.jdtech.jellyfin.setup.presentation.users.UsersAction
@@ -80,8 +84,16 @@ fun UsersScreen(
 @Composable
 private fun UsersScreenLayout(state: UsersState, onAction: (UsersAction) -> Unit, baseUrl: String) {
     val focusRequester = remember { FocusRequester() }
+    val addUserFocusRequester = remember { FocusRequester() }
+    val hasNoUsers = state.users.isEmpty() && state.publicUsers.isEmpty()
 
     Box(modifier = Modifier.fillMaxSize()) {
+        IconButton(
+            onClick = { onAction(UsersAction.OnChangeServerClick) },
+            modifier = Modifier.align(Alignment.TopEnd).padding(MaterialTheme.spacings.small),
+        ) {
+            Icon(painter = painterResource(CoreR.drawable.ic_server), contentDescription = null)
+        }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth().align(Alignment.Center),
@@ -96,7 +108,7 @@ private fun UsersScreenLayout(state: UsersState, onAction: (UsersAction) -> Unit
                 color = Color(0xFFBDBDBD),
             )
             Spacer(modifier = Modifier.height(MaterialTheme.spacings.large))
-            if (state.users.isEmpty() && state.publicUsers.isEmpty()) {
+            if (hasNoUsers) {
                 Text(
                     text = stringResource(id = SetupR.string.users_no_users),
                     style = MaterialTheme.typography.bodyMedium,
@@ -126,11 +138,17 @@ private fun UsersScreenLayout(state: UsersState, onAction: (UsersAction) -> Unit
                         )
                     }
                 }
-                LaunchedEffect(true) { focusRequester.requestFocus() }
+                LaunchedEffect(true) { runCatching { focusRequester.requestFocus() } }
             }
             Spacer(modifier = Modifier.height(MaterialTheme.spacings.large))
-            OutlinedButton(onClick = { onAction(UsersAction.OnAddClick) }) {
+            OutlinedButton(
+                onClick = { onAction(UsersAction.OnAddClick) },
+                modifier = Modifier.focusRequester(addUserFocusRequester),
+            ) {
                 Text(text = stringResource(id = SetupR.string.users_btn_add_user))
+            }
+            if (hasNoUsers) {
+                LaunchedEffect(true) { runCatching { addUserFocusRequester.requestFocus() } }
             }
         }
     }
@@ -139,7 +157,7 @@ private fun UsersScreenLayout(state: UsersState, onAction: (UsersAction) -> Unit
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun UsersScreenLayoutPreview() {
-    FindroidTheme {
+    JellyxTheme {
         UsersScreenLayout(
             state = UsersState(users = dummyUsers, publicUsers = dummyUsers, serverName = "Demo"),
             onAction = {},
@@ -151,7 +169,7 @@ private fun UsersScreenLayoutPreview() {
 @Preview(device = "id:tv_1080p")
 @Composable
 private fun UsersScreenLayoutPreviewNoUsers() {
-    FindroidTheme {
+    JellyxTheme {
         UsersScreenLayout(
             state = UsersState(serverName = "Demo"),
             onAction = {},

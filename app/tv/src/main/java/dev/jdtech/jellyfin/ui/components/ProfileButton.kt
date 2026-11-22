@@ -18,13 +18,14 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import coil3.compose.AsyncImage
 import dev.jdtech.jellyfin.api.JellyfinApi
 import dev.jdtech.jellyfin.core.R
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyUser
 import dev.jdtech.jellyfin.models.User
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import org.jellyfin.sdk.model.api.ImageType
 
 @Composable
@@ -40,8 +41,13 @@ fun ProfileButton(user: User?, onClick: () -> Unit, modifier: Modifier = Modifie
             ),
         border =
             ClickableSurfaceDefaults.border(
-                border = Border(BorderStroke(1.dp, Color.White), shape = CircleShape),
-                focusedBorder = Border(BorderStroke(4.dp, Color.White), shape = CircleShape),
+                border =
+                    Border(
+                        BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)),
+                        shape = CircleShape,
+                    ),
+                focusedBorder =
+                    Border(BorderStroke(4.dp, MaterialTheme.colorScheme.primary), shape = CircleShape),
             ),
         shape = ClickableSurfaceDefaults.shape(shape = CircleShape, focusedShape = CircleShape),
         modifier = modifier.width(32.dp).aspectRatio(1f),
@@ -49,7 +55,7 @@ fun ProfileButton(user: User?, onClick: () -> Unit, modifier: Modifier = Modifie
         Icon(
             painter = painterResource(id = R.drawable.ic_user),
             contentDescription = null,
-            tint = Color.White,
+            tint = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.width(16.dp).height(16.dp).align(Alignment.Center),
         )
         user?.let {
@@ -66,5 +72,5 @@ fun ProfileButton(user: User?, onClick: () -> Unit, modifier: Modifier = Modifie
 @Preview
 @Composable
 private fun ProfileButtonPreview() {
-    FindroidTheme { ProfileButton(user = dummyUser, onClick = {}) }
+    JellyxTheme { ProfileButton(user = dummyUser, onClick = {}) }
 }

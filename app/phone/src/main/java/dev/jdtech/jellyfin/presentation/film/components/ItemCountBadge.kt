@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import dev.jdtech.jellyfin.presentation.theme.FindroidTheme
+import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
 @Composable
@@ -27,5 +27,5 @@ fun ItemCountBadge(unplayedItemCount: Int, modifier: Modifier = Modifier) {
 @Composable
 @Preview
 private fun ItemCountBadgePreview() {
-    FindroidTheme { ItemCountBadge(110) }
+    JellyxTheme { ItemCountBadge(110) }
 }
