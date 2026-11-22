@@ -18,7 +18,8 @@ class AppPreferences @Inject constructor(val sharedPreferences: SharedPreference
 
     // Interface
     val theme = Preference("pref_theme", "system")
-    val dynamicColors = Preference("pref_dynamic_colors", true)
+    val accentColor = Preference("pref_accent_color", "jellyfin")
+    val dynamicColors = Preference("pref_dynamic_colors", false)
     val homeSuggestions = Preference<Boolean>("home_suggestions", true)
     val homeContinueWatching = Preference<Boolean>("home_continue_watching", true)
     val homeNextUp = Preference<Boolean>("home_next_up", true)
@@ -32,7 +33,7 @@ class AppPreferences @Inject constructor(val sharedPreferences: SharedPreference
     // Player - mpv
     val playerMpv = Preference("pref_player_mpv", false)
     val playerMpvHwdec = Preference("pref_player_mpv_hwdec", "mediacodec")
-    val playerMpvVo = Preference("pref_player_mpv_vo", "gpu-next")
+    val playerMpvVo = Preference("pref_player_mpv_vo", "gpu")
     val playerMpvAo = Preference("pref_player_mpv_ao", "aaudio")
 
     // Player - gestures
@@ -42,7 +43,7 @@ class AppPreferences @Inject constructor(val sharedPreferences: SharedPreference
     val playerGesturesSeek = Preference("pref_player_gestures_seek", true)
     val playerGesturesSeekTrickplay = Preference("pref_player_gestures_seek_trickplay", true)
     val playerGesturesChapterSkip = Preference("pref_player_gestures_chapter_skip", true)
-    val playerGesturesBrightnessRemember = Preference("pref_player_brightness_remember", false)
+    val playerGesturesBrightnessRemember = Preference("pref_player_brightness_remember", true)
     val playerGesturesStartMaximized = Preference("pref_player_start_maximized", false)
 
     // Player - seeking
@@ -77,7 +78,7 @@ class AppPreferences @Inject constructor(val sharedPreferences: SharedPreference
         get() = Preference("pref_player_media_segments_next_episode_threshold", 5_000L)
 
     // Player - trickplay
-    val playerTrickplay = Preference("pref_player_trickplay", true)
+    val playerTrickplay = Preference("pref_player_trickplay", false)
 
     // Player - PiP
     val playerPipGesture = Preference("pref_player_picture_in_picture_gesture", false)
@@ -107,6 +108,14 @@ class AppPreferences @Inject constructor(val sharedPreferences: SharedPreference
 
     // Permissions
     val localNetworkPermissionDecided = Preference("pref_permission_local_network_decided", false)
+
+    // Setup
+    val defaultServerSeeded = Preference("pref_default_server_seeded", false)
+
+    // Auto-update
+    val lastUpdateCheckEpochMs = Preference("pref_last_update_check_ms", 0L)
+    val availableUpdateJson = Preference<String?>("pref_available_update_json", null)
+    val dismissedUpdateVersion = Preference<String?>("pref_dismissed_update_version", null)
 
     // Migrations
     val mpvMigrated = Preference("mpv_migrated", false)

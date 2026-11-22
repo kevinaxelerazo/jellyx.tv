@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose.compiler)
     alias(libs.plugins.kotlin.parcelize)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
@@ -24,6 +25,8 @@ android {
     productFlavors { register("libre") }
 
     buildFeatures { compose = true }
+
+    testOptions { unitTests.isReturnDefaultValues = true }
 }
 
 dependencies {
@@ -31,6 +34,8 @@ dependencies {
     implementation(projects.player.core)
     implementation(projects.settings)
     implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.core)
     implementation(libs.androidx.hilt.work)
@@ -45,9 +50,14 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.jellyfin.core)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.material)
     implementation(libs.okhttp)
     implementation(libs.timber)
     implementation(libs.slf4j.api)
     implementation(libs.slf4j.android)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockk)
 }

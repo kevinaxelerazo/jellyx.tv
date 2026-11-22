@@ -73,7 +73,7 @@
     <string name="settings_category_permissions">권한</string>
     <string name="permission_local_network">로컬 네트워크 액세스</string>
     <string name="permission_local_network_summary">로컬 네트워크의 서버를 찾고 연결하는 데 필요합니다</string>
-    <string name="permission_local_network_rationale">Jellyfin 서버를 찾고 연결하려면 Findroid에 로컬 네트워크 액세스 권한이 필요합니다. 원격 서버에는 영향을 주지 않습니다.</string>
+    <string name="permission_local_network_rationale">Jellyfin 서버를 찾고 연결하려면 Jellyx.tv에 로컬 네트워크 액세스 권한이 필요합니다. 원격 서버에는 영향을 주지 않습니다.</string>
     <string name="permission_status_granted">허용됨</string>
     <string name="permission_status_denied">거부됨</string>
     <string name="users">사용자</string>

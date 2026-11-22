@@ -162,7 +162,8 @@ class SettingsViewModel @Inject constructor(private val appPreferences: AppPrefe
                                             listOf(
                                                 PreferenceSelect(
                                                     nameStringResource = R.string.theme,
-                                                    supportedDeviceTypes = listOf(DeviceType.PHONE),
+                                                    supportedDeviceTypes =
+                                                        listOf(DeviceType.PHONE, DeviceType.TV),
                                                     backendPreference = appPreferences.theme,
                                                     onUpdate = { value ->
                                                         viewModelScope.launch {
@@ -175,6 +176,14 @@ class SettingsViewModel @Inject constructor(private val appPreferences: AppPrefe
                                                     },
                                                     options = R.array.theme,
                                                     optionValues = R.array.theme_values,
+                                                ),
+                                                PreferenceSelect(
+                                                    nameStringResource = R.string.accent_color,
+                                                    supportedDeviceTypes =
+                                                        listOf(DeviceType.PHONE, DeviceType.TV),
+                                                    backendPreference = appPreferences.accentColor,
+                                                    options = R.array.accent_color,
+                                                    optionValues = R.array.accent_color_values,
                                                 ),
                                                 PreferenceSwitch(
                                                     nameStringResource = R.string.dynamic_colors,

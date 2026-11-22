@@ -38,6 +38,12 @@
     <string name="dynamic_colors_summary">Usar colores dinámicos de Material You (solo en Android 12+)</string>
     <string name="theme_system">Seguir tema del dispositivo</string>
     <string name="theme_light">Claro</string>
+    <string name="accent_color">Color de acento</string>
+    <string name="accent_jellyfin">Azul Jellyfin</string>
+    <string name="accent_netflix">Rojo Netflix</string>
+    <string name="accent_emerald">Verde Esmeralda</string>
+    <string name="accent_purple">Morado</string>
+    <string name="accent_amber">Ámbar</string>
     <string name="theme_dark">Oscuro</string>
     <string name="settings_category_network">Red</string>
     <string name="pref_player_mpv_hwdec">Decodificación por hardware</string>

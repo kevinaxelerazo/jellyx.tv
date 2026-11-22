@@ -1,0 +1,22 @@
+# Local configuration template for Jellyx.tv
+# Copy to local.properties (which is gitignored) and fill in optional values.
+# Never commit local.properties or private server URLs/IPs/API keys.
+
+# Android SDK path (optional if ANDROID_HOME / ANDROID_SDK_ROOT is set)
+# sdk.dir=/path/to/Android/Sdk
+
+# Optional pre-seeded server URLs (leave empty for public builds so users enter their server URL)
+# JELLYX_DEFAULT_SERVER_URL=https://your-domain.example.com
+# JELLYX_FALLBACK_SERVER_URL=
+# JELLYX_DEFAULT_SERVER_NAME=Jellyx.tv
+
+# Optional external ratings API keys
+# JELLYX_TMDB_API_KEY=
+# JELLYX_OMDB_API_KEY=
+# JELLYX_MDBLIST_API_KEY=
+
+# 24h Auto-Update sources
+# Custom JSON manifest URL (optional; overrides GitHub Releases if set)
+# JELLYX_UPDATE_MANIFEST_URL=https://your-domain.example.com/jellyx/version.json
+# Single GitHub repository holding both tv & mobile release APKs (default: kevinaxelerazo/jellyx.tv)
+JELLYX_UPDATE_REPO=kevinaxelerazo/jellyx.tv
