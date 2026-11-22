@@ -45,6 +45,27 @@ import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
 
+data class MpvPlaybackStats(
+    val width: Int = 0,
+    val height: Int = 0,
+    val fps: Double? = null,
+    val videoCodec: String? = null,
+    val hwdec: String? = null,
+    val videoBitrateBps: Long? = null,
+    val primaries: String? = null,
+    val gamma: String? = null,
+    val audioCodec: String? = null,
+    val audioChannels: Int? = null,
+    val audioSampleRate: Int? = null,
+    val audioBitrateBps: Long? = null,
+    val audioLang: String? = null,
+    val droppedFrames: Int = 0,
+    val decoderDroppedFrames: Int = 0,
+    val voDelayedFrames: Int = 0,
+    val bufferAheadSec: Double = 0.0,
+    val avSyncMs: Double? = null,
+)
+
 class MPVPlayer(
     context: Context,
     private val audioAttributes: AudioAttributes = AudioAttributes.DEFAULT,
@@ -57,6 +78,8 @@ class MPVPlayer(
     videoOutput: String = "gpu-next",
     audioOutput: String = "aaudio",
     hwDec: String = "mediacodec",
+    private val isLowRamDevice: Boolean = false,
+    private val totalRamMb: Long = 4096L,
 ) : BasePlayer(), MPVLib.EventObserver, AudioManager.OnAudioFocusChangeListener {
     private val mpvLib: MPVLib
     private val audioManager: AudioManager by lazy { context.getSystemService()!! }
@@ -77,6 +100,8 @@ class MPVPlayer(
         videoOutput = builder.videoOutput,
         audioOutput = builder.audioOutput,
         hwDec = builder.hwDec,
+        isLowRamDevice = builder.isLowRamDevice,
+        totalRamMb = builder.totalRamMb,
     )
 
     class Builder(val context: Context) {
@@ -105,6 +130,12 @@ class MPVPlayer(
             private set
 
         var hwDec: String = "mediacodec"
+            private set
+
+        var isLowRamDevice: Boolean = false
+            private set
+
+        var totalRamMb: Long = 4096L
             private set
 
         fun setAudioAttributes(audioAttributes: AudioAttributes, handleAudioFocus: Boolean) =
@@ -136,6 +167,11 @@ class MPVPlayer(
 
         fun setHwDec(hwDec: String) = apply { this.hwDec = hwDec }
 
+        fun setDeviceMemoryProfile(isLowRamDevice: Boolean, totalRamMb: Long) = apply {
+            this.isLowRamDevice = isLowRamDevice
+            this.totalRamMb = totalRamMb
+        }
+
         fun build() = MPVPlayer(this)
     }
 
@@ -155,28 +191,55 @@ class MPVPlayer(
             opt,
             cacheDir.path,
         )
+        val isLowEndProfile = isLowRamDevice || totalRamMb <= 4500L
+        val effectiveVideoOutput = if (isLowEndProfile && videoOutput == "gpu-next") "gpu" else videoOutput
         mpvLib.setOptionString("profile", "fast")
-        mpvLib.setOptionString("vo", videoOutput)
+        mpvLib.setOptionString("vo", effectiveVideoOutput)
         mpvLib.setOptionString("ao", audioOutput)
         mpvLib.setOptionString("gpu-context", "android")
         mpvLib.setOptionString("opengl-es", "yes")
+        mpvLib.setOptionString("video-sync", "audio")
+        mpvLib.setOptionString("interpolation", "no")
+        if (!isLowEndProfile && totalRamMb >= 4000L) {
+            mpvLib.setOptionString("target-colorspace-hint", "yes")
+        }
 
         // Hardware video decoding
         mpvLib.setOptionString("hwdec", hwDec)
         mpvLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
 
-        // TLS
+        // TLS & Network resilience for IPTV / HLS / Real-Debrid VFS delays
         mpvLib.setOptionString("tls-verify", "no")
+        mpvLib.setOptionString("user-agent", "VLC/3.0.20 LibVLC/3.0.20")
+        mpvLib.setOptionString("network-timeout", "25")
+        mpvLib.setOptionString(
+            "stream-lavf-o",
+            "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5",
+        )
 
         // Cache
         mpvLib.setOptionString("cache", "yes")
+        mpvLib.setOptionString("cache-secs", "60")
+        mpvLib.setOptionString("demuxer-readahead-secs", "35")
         mpvLib.setOptionString("cache-pause-initial", "yes")
-        mpvLib.setOptionString("demuxer-max-bytes", "64MiB")
-        mpvLib.setOptionString("demuxer-max-back-bytes", "32MiB")
+        mpvLib.setOptionString("cache-pause-wait", "4")
+        val (maxBytes, maxBackBytes) =
+            when {
+                isLowRamDevice || totalRamMb <= 3000L -> "64MiB" to "24MiB"
+                totalRamMb >= 4000L -> "150MiB" to "64MiB"
+                else -> "96MiB" to "32MiB"
+            }
+        mpvLib.setOptionString("demuxer-max-bytes", maxBytes)
+        mpvLib.setOptionString("demuxer-max-back-bytes", maxBackBytes)
 
         // Subs
         mpvLib.setOptionString("sub-scale-with-window", "yes")
         mpvLib.setOptionString("sub-use-margins", "no")
+        mpvLib.setOptionString("sub-pos", "98")
+        mpvLib.setOptionString("sub-margin-y", "14")
+        mpvLib.setOptionString("sub-font-size", "44")
+        mpvLib.setOptionString("sub-back-color", "#00000000")
+        mpvLib.setOptionString("sub-border-size", "2.5")
 
         // Language
         // Split on "-" and use last part because media3 does some weird mapping
@@ -211,6 +274,7 @@ class MPVPlayer(
                 Property("time-pos", MpvFormat.MPV_FORMAT_INT64),
                 Property("duration", MpvFormat.MPV_FORMAT_INT64),
                 Property("demuxer-cache-time", MpvFormat.MPV_FORMAT_INT64),
+                Property("demuxer-cache-duration", MpvFormat.MPV_FORMAT_DOUBLE),
                 Property("speed", MpvFormat.MPV_FORMAT_DOUBLE),
                 Property("playlist-count", MpvFormat.MPV_FORMAT_INT64),
                 Property("playlist-current-pos", MpvFormat.MPV_FORMAT_INT64),
@@ -309,15 +373,18 @@ class MPVPlayer(
     private var playbackParameters: PlaybackParameters = PlaybackParameters.DEFAULT
 
     // MPV Custom
+    @Volatile private var isReleased: Boolean = false
     private var isPlayerReady: Boolean = false
     private var isSeekable: Boolean = false
     private var currentMediaItemIndex: Int = 0
     private var currentPositionMs: Long? = null
     private var currentDurationMs: Long? = null
     private var currentCacheDurationMs: Long? = null
+    @Volatile private var currentCacheAheadMs: Long = 0L
     private var initialCommands = mutableListOf<Array<String>>()
     private var initialIndex: Int = 0
     private var initialSeekTo: Long = 0L
+    private var pendingInitialIndex: Int? = null
     private var oldMediaItem: MediaItem? = null
 
     // mpv events
@@ -408,7 +475,15 @@ class MPVPlayer(
                     if (value < 0) {
                         return@post
                     }
-                    currentMediaItemIndex = value.toInt()
+                    val newIndex = value.toInt()
+                    val expectedInitial = pendingInitialIndex
+                    if (expectedInitial != null) {
+                        if (newIndex != expectedInitial) {
+                            return@post
+                        }
+                        pendingInitialIndex = null
+                    }
+                    currentMediaItemIndex = newIndex
                     val newMediaItem = currentMediaItem
                     if (oldMediaItem?.mediaId != newMediaItem?.mediaId) {
                         oldMediaItem = newMediaItem
@@ -427,6 +502,9 @@ class MPVPlayer(
     override fun eventProperty(property: String, value: Double) {
         handler.post {
             when (property) {
+                "demuxer-cache-duration" -> {
+                    currentCacheAheadMs = (value * C.MILLIS_PER_SECOND).toLong().coerceAtLeast(0L)
+                }
                 "speed" -> {
                     playbackParameters = playbackParameters.withSpeed(value.toFloat())
                     listeners.sendEvent(EVENT_PLAYBACK_PARAMETERS_CHANGED) { listener ->
@@ -470,6 +548,7 @@ class MPVPlayer(
                         for (videoListener in videoListeners) {
                             videoListener.onRenderedFirstFrame()
                         }
+                        setPlayerStateAndNotifyIfChanged(playbackState = STATE_READY)
                     } else {
                         setPlayerStateAndNotifyIfChanged(playbackState = STATE_READY)
                     }
@@ -834,6 +913,7 @@ class MPVPlayer(
         currentPositionMs = null
         currentDurationMs = null
         currentCacheDurationMs = null
+        currentCacheAheadMs = 0L
         currentTracks = Tracks.EMPTY
         playbackParameters = PlaybackParameters.DEFAULT
         initialCommands.clear()
@@ -841,6 +921,10 @@ class MPVPlayer(
 
     /** Prepares the player. */
     override fun prepare() {
+        if (internalMediaItems.isEmpty()) return
+        val safeInitialIndex = initialIndex.coerceIn(0, internalMediaItems.lastIndex)
+        initialIndex = safeInitialIndex
+        pendingInitialIndex = safeInitialIndex.takeIf { it > 0 }
         internalMediaItems.forEachIndexed { index, mediaItem ->
             mpvLib.command(
                 arrayOf(
@@ -850,7 +934,7 @@ class MPVPlayer(
                 )
             )
         }
-        prepareMediaItem(initialIndex)
+        prepareMediaItem(safeInitialIndex)
     }
 
     /**
@@ -1008,14 +1092,21 @@ class MPVPlayer(
             val seekTo = if (positionMs != C.TIME_UNSET) positionMs else initialSeekTo
             initialSeekTo =
                 if (isPlayerReady) {
-                    mpvLib.command(
-                        arrayOf("seek", "${seekTo.toDouble().div(C.MILLIS_PER_SECOND)}", "absolute")
-                    )
+                    if (seekTo != C.TIME_UNSET && seekTo > 0L) {
+                        mpvLib.command(
+                            arrayOf(
+                                "seek",
+                                "${seekTo.toDouble().div(C.MILLIS_PER_SECOND)}",
+                                "absolute",
+                            )
+                        )
+                    }
                     0L
                 } else {
-                    seekTo
+                    if (seekTo != C.TIME_UNSET && seekTo > 0L) seekTo else 0L
                 }
         } else {
+            pendingInitialIndex = null
             prepareMediaItem(mediaItemIndex)
             play()
         }
@@ -1042,6 +1133,7 @@ class MPVPlayer(
             // duplicate
             // external subtitle entries.
             if (currentMediaItemIndex != index) {
+                currentMediaItemIndex = index
                 mpvLib.command(arrayOf("playlist-play-index", "$index"))
             }
             setPlayerStateAndNotifyIfChanged(playbackState = STATE_BUFFERING)
@@ -1094,6 +1186,7 @@ class MPVPlayer(
      * player must not be used after calling this method.
      */
     override fun release() {
+        isReleased = true
         if (handleAudioFocus) {
             AudioManagerCompat.abandonAudioFocusRequest(audioManager, audioFocusRequest)
         }
@@ -1193,7 +1286,80 @@ class MPVPlayer(
      * buffered, in milliseconds.
      */
     override fun getBufferedPosition(): Long {
-        return currentCacheDurationMs ?: contentPosition
+        val pos = currentPositionMs?.coerceAtLeast(0L) ?: 0L
+        if (currentCacheAheadMs > 0L) return pos + currentCacheAheadMs
+        val absCache = currentCacheDurationMs
+        return if (absCache != null && absCache >= pos) absCache else pos
+    }
+
+    fun getBufferedAheadSec(): Double {
+        if (isReleased) return 0.0
+        if (currentCacheAheadMs > 0L) return currentCacheAheadMs / 1000.0
+        return runCatching { mpvLib.getPropertyDouble("demuxer-cache-duration") }
+            .getOrNull()
+            ?.coerceAtLeast(0.0) ?: 0.0
+    }
+
+    fun getPlaybackStats(): MpvPlaybackStats? {
+        if (isReleased) return null
+        return runCatching {
+                val width =
+                    mpvLib.getPropertyInt("video-params/w")
+                        ?: mpvLib.getPropertyInt("dwidth")
+                        ?: 0
+                val height =
+                    mpvLib.getPropertyInt("video-params/h")
+                        ?: mpvLib.getPropertyInt("dheight")
+                        ?: 0
+                val fps =
+                    mpvLib.getPropertyDouble("estimated-vf-fps")?.takeIf { it > 0.0 }
+                        ?: mpvLib.getPropertyDouble("container-fps")?.takeIf { it > 0.0 }
+                val videoCodec = mpvLib.getPropertyString("video-codec")?.takeIf { it.isNotBlank() }
+                val hwdec = mpvLib.getPropertyString("hwdec-current")?.takeIf { it.isNotBlank() }
+                val videoBitrateBps =
+                    mpvLib.getPropertyDouble("video-bitrate")?.takeIf { it > 0.0 }?.toLong()
+                val primaries =
+                    mpvLib.getPropertyString("video-params/primaries")?.takeIf { it.isNotBlank() }
+                val gamma =
+                    mpvLib.getPropertyString("video-params/gamma")?.takeIf { it.isNotBlank() }
+                val audioCodec =
+                    mpvLib.getPropertyString("audio-codec-name")?.takeIf { it.isNotBlank() }
+                        ?: mpvLib.getPropertyString("audio-codec")?.takeIf { it.isNotBlank() }
+                val audioChannels =
+                    mpvLib.getPropertyInt("audio-params/channel-count")?.takeIf { it > 0 }
+                val audioSampleRate =
+                    mpvLib.getPropertyInt("audio-params/samplerate")?.takeIf { it > 0 }
+                val audioBitrateBps =
+                    mpvLib.getPropertyDouble("audio-bitrate")?.takeIf { it > 0.0 }?.toLong()
+                val audioLang =
+                    mpvLib.getPropertyString("current-tracks/audio/lang")?.takeIf { it.isNotBlank() }
+                val droppedFrames = mpvLib.getPropertyInt("frame-drop-count") ?: 0
+                val decoderDroppedFrames = mpvLib.getPropertyInt("decoder-frame-drop-count") ?: 0
+                val voDelayedFrames = mpvLib.getPropertyInt("vo-delayed-frame-count") ?: 0
+                val bufferAheadSec = getBufferedAheadSec()
+                val avSyncMs = mpvLib.getPropertyDouble("avsync")?.let { it * 1000.0 }
+                MpvPlaybackStats(
+                    width = width,
+                    height = height,
+                    fps = fps,
+                    videoCodec = videoCodec,
+                    hwdec = hwdec,
+                    videoBitrateBps = videoBitrateBps,
+                    primaries = primaries,
+                    gamma = gamma,
+                    audioCodec = audioCodec,
+                    audioChannels = audioChannels,
+                    audioSampleRate = audioSampleRate,
+                    audioBitrateBps = audioBitrateBps,
+                    audioLang = audioLang,
+                    droppedFrames = droppedFrames,
+                    decoderDroppedFrames = decoderDroppedFrames,
+                    voDelayedFrames = voDelayedFrames,
+                    bufferAheadSec = bufferAheadSec,
+                    avSyncMs = avSyncMs,
+                )
+            }
+            .getOrNull()
     }
 
     /**
@@ -1326,8 +1492,26 @@ class MPVPlayer(
      *
      * @param surfaceView The surface view.
      */
+    private var attachedSurfaceView: SurfaceView? = null
+
     override fun setVideoSurfaceView(surfaceView: SurfaceView?) {
+        if (attachedSurfaceView === surfaceView && surfaceView != null) {
+            return
+        }
+        attachedSurfaceView?.holder?.removeCallback(surfaceHolder)
+        attachedSurfaceView = surfaceView
         surfaceView?.holder?.addCallback(surfaceHolder)
+        if (surfaceView != null && surfaceView.holder.surface?.isValid == true) {
+            surfaceHolder.surfaceCreated(surfaceView.holder)
+            if (surfaceView.width > 0 && surfaceView.height > 0) {
+                surfaceHolder.surfaceChanged(
+                    surfaceView.holder,
+                    0,
+                    surfaceView.width,
+                    surfaceView.height,
+                )
+            }
+        }
     }
 
     /**
@@ -1338,6 +1522,10 @@ class MPVPlayer(
      */
     override fun clearVideoSurfaceView(surfaceView: SurfaceView?) {
         surfaceView?.holder?.removeCallback(surfaceHolder)
+        if (attachedSurfaceView === surfaceView) {
+            surfaceView?.holder?.let { surfaceHolder.surfaceDestroyed(it) }
+            attachedSurfaceView = null
+        }
     }
 
     /**
@@ -1607,7 +1795,7 @@ class MPVPlayer(
                             .setWidth(json.optInt("demux-w", Format.NO_VALUE))
                             .setHeight(json.optInt("demux-h", Format.NO_VALUE))
                             .setFrameRate(
-                                (json.optNullableDouble("demux-w") ?: Format.NO_VALUE).toFloat()
+                                (json.optNullableDouble("demux-fps") ?: Format.NO_VALUE).toFloat()
                             )
                             .build()
                     }

@@ -18,6 +18,8 @@ android {
         named("release") { isMinifyEnabled = false }
         register("staging") { initWith(getByName("release")) }
     }
+
+    testOptions { unitTests.isReturnDefaultValues = true }
 }
 
 dependencies {
@@ -33,5 +35,10 @@ dependencies {
     implementation(libs.jellyfin.core)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.libmpv)
+    implementation(libs.okhttp)
     implementation(libs.timber)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockk)
 }

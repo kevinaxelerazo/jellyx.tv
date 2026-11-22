@@ -2,12 +2,12 @@ package dev.jdtech.jellyfin.player.local.domain
 
 import androidx.core.net.toUri
 import androidx.media3.common.MimeTypes
-import dev.jdtech.jellyfin.models.FindroidChapter
-import dev.jdtech.jellyfin.models.FindroidEpisode
-import dev.jdtech.jellyfin.models.FindroidItem
-import dev.jdtech.jellyfin.models.FindroidMovie
-import dev.jdtech.jellyfin.models.FindroidSourceType
-import dev.jdtech.jellyfin.models.FindroidSources
+import dev.jdtech.jellyfin.models.JellyxChannel
+import dev.jdtech.jellyfin.models.JellyxChapter
+import dev.jdtech.jellyfin.models.JellyxEpisode
+import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.models.JellyxMovie
+import dev.jdtech.jellyfin.models.JellyxSources
 import dev.jdtech.jellyfin.player.core.domain.models.ExternalSubtitle
 import dev.jdtech.jellyfin.player.core.domain.models.PlayerChapter
 import dev.jdtech.jellyfin.player.core.domain.models.PlayerItem
@@ -20,9 +20,14 @@ import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.MediaStreamType
 import timber.log.Timber
 
-class PlaylistManager @Inject internal constructor(private val repository: JellyfinRepository) {
-    private var startItem: FindroidItem? = null
-    private var items: List<FindroidItem> = emptyList()
+class PlaylistManager
+@Inject
+internal constructor(
+    private val repository: JellyfinRepository,
+    private val smartSourceSelector: SmartSourceSelector,
+) {
+    private var startItem: JellyxItem? = null
+    private var items: List<JellyxItem> = emptyList()
     private val playerItems: MutableList<PlayerItem> = mutableListOf()
     var currentItemIndex: Int = 0
 
@@ -109,6 +114,20 @@ class PlaylistManager @Inject internal constructor(private val repository: Jelly
                     items = episodes
                     episode
                 }
+                BaseItemKind.TV_CHANNEL -> {
+                    val cachedChannels = items.filterIsInstance<JellyxChannel>()
+                    val channels =
+                        if (cachedChannels.any { it.id == itemId }) {
+                            cachedChannels
+                        } else {
+                            repository.getLiveTvChannels()
+                        }
+                    val selected =
+                        channels.firstOrNull { it.id == itemId }
+                            ?: repository.getLiveTvChannel(itemId)
+                    items = if (channels.isNotEmpty()) channels else listOf(selected)
+                    selected
+                }
                 else -> null
             }
 
@@ -121,11 +140,91 @@ class PlaylistManager @Inject internal constructor(private val repository: Jelly
         currentItemIndex = items.indexOfFirst { it.id == initialItem.id }
 
         val playbackPosition =
-            if (!startFromBeginning) initialItem.playbackPositionTicks.div(10000) else 0
+            if (initialItem is JellyxChannel || startFromBeginning) {
+                0L
+            } else {
+                initialItem.playbackPositionTicks.div(10000)
+            }
+        playerItems.clear()
         val playerItem = initialItem.toPlayerItem(mediaSourceIndex, playbackPosition)
         playerItems.add(playerItem)
 
         return playerItem
+    }
+
+    fun resetLoadedNeighbors(keepItemId: UUID) {
+        playerItems.removeAll { it.itemId != keepItemId }
+        val idx = items.indexOfFirst { it.id == keepItemId }
+        if (idx >= 0) {
+            currentItemIndex = idx
+        }
+    }
+
+    suspend fun refreshItemSource(itemId: UUID, playbackPositionMs: Long): PlayerItem? {
+        val targetItem =
+            items.firstOrNull { it.id == itemId }
+                ?: startItem?.takeIf { it.id == itemId }
+                ?: return null
+        val refreshed = targetItem.toPlayerItem(null, playbackPositionMs)
+        val existingIdx = playerItems.indexOfFirst { it.itemId == itemId }
+        if (existingIdx >= 0) {
+            playerItems[existingIdx] = refreshed
+        } else {
+            playerItems.add(refreshed)
+        }
+        return refreshed
+    }
+
+    fun getSeasonEpisodes(): List<JellyxEpisode> = items.filterIsInstance<JellyxEpisode>()
+
+    fun getCurrentEpisodeSeasonAndSeries(): Pair<UUID, UUID>? {
+        val episode =
+            (items.getOrNull(currentItemIndex) as? JellyxEpisode)
+                ?: (startItem as? JellyxEpisode)
+                ?: return null
+        return episode.seasonId to episode.seriesId
+    }
+
+    fun getChannelIdAtOffset(delta: Int): UUID? {
+        if (startItem !is JellyxChannel || items.isEmpty()) return null
+        val nextIndex = ((currentItemIndex + delta) % items.size + items.size) % items.size
+        return items.getOrNull(nextIndex)?.id
+    }
+
+    fun getLiveChannels(): List<JellyxChannel> {
+        return items.filterIsInstance<JellyxChannel>()
+    }
+
+    fun getCurrentChannel(): JellyxChannel? {
+        return (items.getOrNull(currentItemIndex) as? JellyxChannel)
+            ?: (startItem as? JellyxChannel)
+    }
+
+    fun updateChannelFavorite(channelId: UUID, favorite: Boolean): List<JellyxChannel> {
+        val currentId = items.getOrNull(currentItemIndex)?.id ?: startItem?.id
+        val updated =
+            items
+                .filterIsInstance<JellyxChannel>()
+                .map { channel ->
+                    if (channel.id == channelId) channel.copy(favorite = favorite) else channel
+                }
+                .sortedWith(
+                    compareByDescending<JellyxChannel> { it.favorite }
+                        .thenBy { it.channelNumber?.toDoubleOrNull() ?: Double.MAX_VALUE }
+                        .thenBy { it.displayName.lowercase() }
+                )
+        items = updated
+        if (currentId != null) {
+            val newIndex = items.indexOfFirst { it.id == currentId }
+            if (newIndex >= 0) {
+                currentItemIndex = newIndex
+            }
+        }
+        val startChannel = startItem as? JellyxChannel
+        if (startChannel != null && startChannel.id == channelId) {
+            startItem = startChannel.copy(favorite = favorite)
+        }
+        return getLiveChannels()
     }
 
     suspend fun getPreviousPlayerItem(): PlayerItem? {
@@ -134,9 +233,10 @@ class PlaylistManager @Inject internal constructor(private val repository: Jelly
         val itemIndex = currentItemIndex - 1
         val playerItem =
             when (startItem) {
-                is FindroidMovie -> null
-                is FindroidEpisode -> {
-                    if (currentItemIndex == 0) {
+                is JellyxMovie,
+                is JellyxChannel -> null
+                is JellyxEpisode -> {
+                    if (currentItemIndex <= 0) {
                         null
                     } else {
                         val item = items[itemIndex]
@@ -168,9 +268,10 @@ class PlaylistManager @Inject internal constructor(private val repository: Jelly
         val itemIndex = currentItemIndex + 1
         val playerItem =
             when (startItem) {
-                is FindroidMovie -> null
-                is FindroidEpisode -> {
-                    if (currentItemIndex == items.lastIndex) {
+                is JellyxMovie,
+                is JellyxChannel -> null
+                is JellyxEpisode -> {
+                    if (currentItemIndex >= items.lastIndex) {
                         null
                     } else {
                         val item = items[itemIndex]
@@ -200,19 +301,18 @@ class PlaylistManager @Inject internal constructor(private val repository: Jelly
         currentItemIndex = items.indexOfFirst { it.id == itemId }
     }
 
-    private suspend fun FindroidItem.toPlayerItem(
+    private suspend fun JellyxItem.toPlayerItem(
         mediaSourceIndex: Int?,
         playbackPosition: Long,
     ): PlayerItem {
-        Timber.d("Converting FindroidItem ${this.id} to PlayerItem")
+        Timber.d("Converting JellyxItem ${this.id} to PlayerItem")
 
         val mediaSources = repository.getMediaSources(id, true)
-        val mediaSource =
-            if (mediaSourceIndex == null) {
-                mediaSources.firstOrNull { it.type == FindroidSourceType.LOCAL } ?: mediaSources[0]
-            } else {
-                mediaSources[mediaSourceIndex]
-            }
+        val mediaSource = smartSourceSelector.selectSource(mediaSources, mediaSourceIndex)
+        val videoStream =
+            mediaSource.mediaStreams.firstOrNull { it.type == MediaStreamType.VIDEO }
+        val audioStream =
+            mediaSource.mediaStreams.firstOrNull { it.type == MediaStreamType.AUDIO }
         val externalSubtitles =
             mediaSource.mediaStreams
                 .filter { mediaStream ->
@@ -227,7 +327,7 @@ class PlaylistManager @Inject internal constructor(private val repository: Jelly
                         mediaStream.path!!.toUri(),
                         when (mediaStream.codec) {
                             "subrip" -> MimeTypes.APPLICATION_SUBRIP
-                            "webvtt" -> MimeTypes.APPLICATION_SUBRIP
+                            "webvtt" -> MimeTypes.TEXT_VTT
                             "ass" -> MimeTypes.TEXT_SSA
                             else -> MimeTypes.TEXT_UNKNOWN
                         },
@@ -235,7 +335,7 @@ class PlaylistManager @Inject internal constructor(private val repository: Jelly
                 }
         val trickplayInfo =
             when (this) {
-                is FindroidSources -> {
+                is JellyxSources -> {
                     this.trickplayInfo?.get(mediaSource.id)?.let {
                         TrickplayInfo(
                             width = it.width,
@@ -256,16 +356,24 @@ class PlaylistManager @Inject internal constructor(private val repository: Jelly
             mediaSourceId = mediaSource.id,
             mediaSourceUri = mediaSource.path,
             playbackPosition = playbackPosition,
-            parentIndexNumber = if (this is FindroidEpisode) parentIndexNumber else null,
-            indexNumber = if (this is FindroidEpisode) indexNumber else null,
-            indexNumberEnd = if (this is FindroidEpisode) indexNumberEnd else null,
+            parentIndexNumber = if (this is JellyxEpisode) parentIndexNumber else null,
+            indexNumber = if (this is JellyxEpisode) indexNumber else null,
+            indexNumberEnd = if (this is JellyxEpisode) indexNumberEnd else null,
             externalSubtitles = externalSubtitles,
             chapters = chapters.toPlayerChapters(),
             trickplayInfo = trickplayInfo,
+            isLiveTv = this is JellyxChannel,
+            sourceName = mediaSource.name,
+            sourceBitrate = mediaSource.bitrate,
+            videoRangeLabel = videoStream?.videoRangeType?.serialName ?: "SDR",
+            videoStreamBitrate = videoStream?.bitRate,
+            audioStreamBitrate = audioStream?.bitRate,
+            totalSourcesCount = mediaSources.size,
+            liveStreamId = mediaSource.liveStreamId,
         )
     }
 
-    private fun List<FindroidChapter>.toPlayerChapters(): List<PlayerChapter> {
+    private fun List<JellyxChapter>.toPlayerChapters(): List<PlayerChapter> {
         return this.map { chapter ->
             PlayerChapter(startPosition = chapter.startPosition, name = chapter.name)
         }
