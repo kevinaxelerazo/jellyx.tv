@@ -20,6 +20,7 @@ import dev.jdtech.jellyfin.models.JellyxShow
 import dev.jdtech.jellyfin.models.JellyxSource
 import dev.jdtech.jellyfin.models.SortBy
 import dev.jdtech.jellyfin.models.SortOrder
+import dev.jdtech.jellyfin.models.StreamingPlatformCatalog
 import dev.jdtech.jellyfin.models.toJellyxChannel
 import dev.jdtech.jellyfin.models.toJellyxCollection
 import dev.jdtech.jellyfin.models.toJellyxEpisode
@@ -33,9 +34,15 @@ import dev.jdtech.jellyfin.models.toJellyxSource
 import dev.jdtech.jellyfin.settings.domain.AppPreferences
 import java.io.File
 import java.time.LocalDateTime
+import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -75,6 +82,10 @@ class JellyfinRepositoryImpl(
     private val cacheEvictionBus: MediaCacheEvictionBus? = null,
 ) : JellyfinRepository {
     private val segmentResolver = SegmentResolver(jellyfinApi, database)
+    private val studiosMutex = Mutex()
+    private var cachedStudiosUserId: UUID? = null
+    private var cachedStudiosFetchedAtMs: Long = 0L
+    private var cachedStudios: List<Pair<UUID, String>> = emptyList()
 
     override suspend fun getPublicSystemInfo(): PublicSystemInfo =
         withContext(Dispatchers.IO) { jellyfinApi.systemApi.getPublicSystemInfo().content }
@@ -235,39 +246,270 @@ class JellyfinRepositoryImpl(
                 .mapNotNull { it.toJellyxItem(this@JellyfinRepositoryImpl, database) }
         }
 
+    private suspend fun getCachedServerStudios(userId: UUID): List<Pair<UUID, String>> =
+        studiosMutex.withLock {
+            val now = System.currentTimeMillis()
+            if (
+                cachedStudiosUserId == userId &&
+                    cachedStudios.isNotEmpty() &&
+                    (now - cachedStudiosFetchedAtMs) <= STUDIOS_CACHE_TTL_MS
+            ) {
+                return@withLock cachedStudios
+            }
+            val fetched =
+                runCatching {
+                        jellyfinApi.studioApi
+                            .getStudios(userId = userId)
+                            .content
+                            .items
+                            .mapNotNull { dto ->
+                                dto.name?.takeIf { it.isNotBlank() }?.let { dto.id to it }
+                            }
+                    }
+                    .getOrDefault(emptyList())
+            if (fetched.isNotEmpty()) {
+                cachedStudiosUserId = userId
+                cachedStudiosFetchedAtMs = now
+                cachedStudios = fetched
+            }
+            fetched
+        }
+
+    override suspend fun getItemsByStreamingPlatform(platformId: String): List<JellyxItem> =
+        withContext(Dispatchers.IO) {
+            val spec =
+                StreamingPlatformCatalog.findById(platformId)
+                    ?: StreamingPlatformCatalog.findByQuery(platformId)
+                    ?: return@withContext emptyList()
+            val userId = jellyfinApi.userId!!
+            coroutineScope {
+                val serverStudios = getCachedServerStudios(userId)
+                val matchedIds = StreamingPlatformCatalog.matchStudioIds(spec, serverStudios)
+
+                val studioQueries =
+                    if (matchedIds.isNotEmpty()) {
+                        matchedIds.chunked(25).map { chunk ->
+                            async {
+                                runCatching {
+                                        jellyfinApi.libraryApi
+                                            .getItems(
+                                                userId = userId,
+                                                studioIds = chunk,
+                                                includeItemTypes =
+                                                    listOf(
+                                                        BaseItemKind.MOVIE,
+                                                        BaseItemKind.SERIES,
+                                                    ),
+                                                recursive = true,
+                                                fields = listOf(ItemFields.PROVIDER_IDS),
+                                                sortBy = listOf(ItemSortBy.SORT_NAME),
+                                            )
+                                            .content
+                                            .items
+                                            .mapNotNull {
+                                                it.toJellyxItem(
+                                                    this@JellyfinRepositoryImpl,
+                                                    database,
+                                                )
+                                            }
+                                    }
+                                    .getOrDefault(emptyList())
+                            }
+                        }
+                    } else {
+                        listOf(
+                            async {
+                                runCatching {
+                                        jellyfinApi.libraryApi
+                                            .getItems(
+                                                userId = userId,
+                                                studios = spec.exactStudioNames.toList(),
+                                                includeItemTypes =
+                                                    listOf(
+                                                        BaseItemKind.MOVIE,
+                                                        BaseItemKind.SERIES,
+                                                    ),
+                                                recursive = true,
+                                                fields = listOf(ItemFields.PROVIDER_IDS),
+                                                sortBy = listOf(ItemSortBy.SORT_NAME),
+                                            )
+                                            .content
+                                            .items
+                                            .mapNotNull {
+                                                it.toJellyxItem(
+                                                    this@JellyfinRepositoryImpl,
+                                                    database,
+                                                )
+                                            }
+                                    }
+                                    .getOrDefault(emptyList())
+                            }
+                        )
+                    }
+
+                val tagQuery = async {
+                    runCatching {
+                            jellyfinApi.libraryApi
+                                .getItems(
+                                    userId = userId,
+                                    tags = spec.tagNames.toList(),
+                                    includeItemTypes =
+                                        listOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
+                                    recursive = true,
+                                    fields = listOf(ItemFields.PROVIDER_IDS),
+                                    sortBy = listOf(ItemSortBy.SORT_NAME),
+                                )
+                                .content
+                                .items
+                                .mapNotNull {
+                                    it.toJellyxItem(this@JellyfinRepositoryImpl, database)
+                                }
+                        }
+                        .getOrDefault(emptyList())
+                }
+
+                val studioResults = studioQueries.awaitAll().flatten()
+                val tagResults = tagQuery.await()
+
+                (studioResults + tagResults)
+                    .distinctBy { it.id }
+                    .sortedBy { it.name.lowercase(Locale.ROOT) }
+            }
+        }
+
     override suspend fun getSearchItems(query: String): List<JellyxItem> =
         withContext(Dispatchers.IO) {
-            val bySearchTerm =
-                jellyfinApi.libraryApi
+            val userId = jellyfinApi.userId!!
+            val trimmed = query.trim()
+            if (trimmed.isEmpty()) {
+                return@withContext jellyfinApi.libraryApi
                     .getItems(
-                        jellyfinApi.userId!!,
+                        userId = userId,
                         searchTerm = query,
                         includeItemTypes = listOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
                         recursive = true,
+                        fields = listOf(ItemFields.PROVIDER_IDS),
                     )
                     .content
                     .items
                     .mapNotNull { it.toJellyxItem(this@JellyfinRepositoryImpl, database) }
+            }
 
-            val trimmed = query.trim()
-            if (trimmed.isEmpty()) return@withContext bySearchTerm
-
-            val byStudio =
-                runCatching {
+            val matchedPlatform = StreamingPlatformCatalog.findByQuery(trimmed)
+            if (matchedPlatform != null) {
+                return@withContext coroutineScope {
+                    val platformDeferred = async {
+                        getItemsByStreamingPlatform(matchedPlatform.id)
+                    }
+                    val searchTermDeferred = async {
                         jellyfinApi.libraryApi
                             .getItems(
-                                jellyfinApi.userId!!,
-                                studios = listOf(trimmed),
+                                userId = userId,
+                                searchTerm = query,
                                 includeItemTypes = listOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
                                 recursive = true,
+                                fields = listOf(ItemFields.PROVIDER_IDS),
                             )
                             .content
                             .items
                             .mapNotNull { it.toJellyxItem(this@JellyfinRepositoryImpl, database) }
                     }
-                    .getOrDefault(emptyList())
+                    (platformDeferred.await() + searchTermDeferred.await()).distinctBy { it.id }
+                }
+            }
 
-            (bySearchTerm + byStudio).distinctBy { it.id }
+            coroutineScope {
+                val bySearchTermDeferred = async {
+                    jellyfinApi.libraryApi
+                        .getItems(
+                            userId = userId,
+                            searchTerm = query,
+                            includeItemTypes = listOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
+                            recursive = true,
+                            fields = listOf(ItemFields.PROVIDER_IDS),
+                        )
+                        .content
+                        .items
+                        .mapNotNull { it.toJellyxItem(this@JellyfinRepositoryImpl, database) }
+                }
+
+                val byCachedStudioDeferred = async {
+                    runCatching {
+                            val serverStudios = getCachedServerStudios(userId)
+                            val matchedStudioIds =
+                                serverStudios
+                                    .filter { (_, name) ->
+                                        name.equals(trimmed, ignoreCase = true) ||
+                                            (trimmed.length >= 3 &&
+                                                name.contains(trimmed, ignoreCase = true))
+                                    }
+                                    .map { (id, _) -> id }
+                                    .distinct()
+                            if (matchedStudioIds.isEmpty()) {
+                                emptyList()
+                            } else {
+                                matchedStudioIds
+                                    .chunked(25)
+                                    .map { chunk ->
+                                        async {
+                                            runCatching {
+                                                    jellyfinApi.libraryApi
+                                                        .getItems(
+                                                            userId = userId,
+                                                            studioIds = chunk,
+                                                            includeItemTypes =
+                                                                listOf(
+                                                                    BaseItemKind.MOVIE,
+                                                                    BaseItemKind.SERIES,
+                                                                ),
+                                                            recursive = true,
+                                                            fields =
+                                                                listOf(ItemFields.PROVIDER_IDS),
+                                                        )
+                                                        .content
+                                                        .items
+                                                        .mapNotNull {
+                                                            it.toJellyxItem(
+                                                                this@JellyfinRepositoryImpl,
+                                                                database,
+                                                            )
+                                                        }
+                                                }
+                                                .getOrDefault(emptyList())
+                                        }
+                                    }
+                                    .awaitAll()
+                                    .flatten()
+                            }
+                        }
+                        .getOrDefault(emptyList())
+                }
+
+                val byStudioDeferred = async {
+                    runCatching {
+                            jellyfinApi.libraryApi
+                                .getItems(
+                                    userId = userId,
+                                    studios = listOf(trimmed),
+                                    includeItemTypes =
+                                        listOf(BaseItemKind.MOVIE, BaseItemKind.SERIES),
+                                    recursive = true,
+                                    fields = listOf(ItemFields.PROVIDER_IDS),
+                                )
+                                .content
+                                .items
+                                .mapNotNull {
+                                    it.toJellyxItem(this@JellyfinRepositoryImpl, database)
+                                }
+                        }
+                        .getOrDefault(emptyList())
+                }
+
+                (bySearchTermDeferred.await() +
+                        byCachedStudioDeferred.await() +
+                        byStudioDeferred.await())
+                    .distinctBy { it.id }
+            }
         }
 
     override suspend fun getSuggestions(): List<JellyxItem> =
@@ -973,5 +1215,9 @@ class JellyfinRepositoryImpl(
 
     override fun getUserId(): UUID {
         return jellyfinApi.userId!!
+    }
+
+    companion object {
+        private const val STUDIOS_CACHE_TTL_MS = 5 * 60 * 1000L
     }
 }

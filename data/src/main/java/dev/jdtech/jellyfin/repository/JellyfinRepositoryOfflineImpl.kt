@@ -16,6 +16,7 @@ import dev.jdtech.jellyfin.models.JellyxShow
 import dev.jdtech.jellyfin.models.JellyxSource
 import dev.jdtech.jellyfin.models.SortBy
 import dev.jdtech.jellyfin.models.SortOrder
+import dev.jdtech.jellyfin.models.StreamingPlatformCatalog
 import dev.jdtech.jellyfin.models.toJellyxEpisode
 import dev.jdtech.jellyfin.models.toJellyxMovie
 import dev.jdtech.jellyfin.models.toJellyxSeason
@@ -157,6 +158,14 @@ class JellyfinRepositoryOfflineImpl(
                     .map { it.toJellyxEpisode(database, jellyfinApi.userId!!) }
             movies + shows + episodes
         }
+    }
+
+    override suspend fun getItemsByStreamingPlatform(platformId: String): List<JellyxItem> {
+        val spec =
+            StreamingPlatformCatalog.findById(platformId)
+                ?: StreamingPlatformCatalog.findByQuery(platformId)
+                ?: return emptyList()
+        return getSearchItems(spec.displayLabel)
     }
 
     override suspend fun getSuggestions(): List<JellyxItem> {

@@ -25,6 +25,7 @@ import org.jellyfin.sdk.api.client.extensions.userApi
 import org.jellyfin.sdk.api.client.extensions.userDataApi
 import org.jellyfin.sdk.api.client.extensions.userViewApi
 import org.jellyfin.sdk.api.client.extensions.videoApi
+import org.jellyfin.sdk.api.operations.StudioApi
 import org.jellyfin.sdk.createJellyfin
 import org.jellyfin.sdk.model.ClientInfo
 
@@ -73,6 +74,7 @@ class JellyfinApi(
     val mediaSegmentApi = api.mediaSegmentApi
     val sessionApi = api.sessionApi
     val showApi = api.showApi
+    val studioApi = StudioApi(api)
     val suggestionApi = api.suggestionApi
     val syncPlayApi = api.syncPlayApi
     val systemApi = api.systemApi

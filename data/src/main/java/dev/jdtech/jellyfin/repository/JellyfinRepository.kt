@@ -68,6 +68,8 @@ interface JellyfinRepository {
 
     suspend fun getSearchItems(query: String): List<JellyxItem>
 
+    suspend fun getItemsByStreamingPlatform(platformId: String): List<JellyxItem>
+
     suspend fun getSuggestions(): List<JellyxItem>
 
     suspend fun getSimilarItems(itemId: UUID, limit: Int = 4): List<JellyxItem>
