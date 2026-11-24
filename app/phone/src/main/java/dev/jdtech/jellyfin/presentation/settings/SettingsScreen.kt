@@ -6,18 +6,27 @@ import android.os.Build
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.recalculateWindowInsets
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -47,6 +56,7 @@ import dev.jdtech.jellyfin.settings.presentation.settings.SettingsAction
 import dev.jdtech.jellyfin.settings.presentation.settings.SettingsEvent
 import dev.jdtech.jellyfin.settings.presentation.settings.SettingsState
 import dev.jdtech.jellyfin.settings.presentation.settings.SettingsViewModel
+import dev.jdtech.jellyfin.update.UpdateCheckViewModel
 import dev.jdtech.jellyfin.utils.ObserveAsEvents
 import dev.jdtech.jellyfin.utils.restart
 import timber.log.Timber
@@ -61,10 +71,13 @@ fun SettingsScreen(
     navigateToAbout: () -> Unit,
     navigateBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
+    updateViewModel: UpdateCheckViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
 
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val isCheckingUpdate by updateViewModel.isChecking.collectAsStateWithLifecycle()
+    val updateStatusMessage by updateViewModel.statusMessage.collectAsStateWithLifecycle()
 
     LaunchedEffect(true) { viewModel.loadPreferences(indexes, DeviceType.PHONE) }
 
@@ -131,6 +144,11 @@ fun SettingsScreen(
                 }
             }
         },
+        showUpdateCheckCard = indexes.size <= 1,
+        isCheckingUpdate = isCheckingUpdate,
+        updateStatusMessage = updateStatusMessage,
+        currentVersionName = updateViewModel.currentVersionName,
+        onCheckForUpdates = { updateViewModel.checkNow() },
     )
 }
 
@@ -140,6 +158,11 @@ private fun SettingsScreenLayout(
     @StringRes title: Int,
     state: SettingsState,
     onAction: (SettingsAction) -> Unit,
+    showUpdateCheckCard: Boolean = false,
+    isCheckingUpdate: Boolean = false,
+    updateStatusMessage: String? = null,
+    currentVersionName: String = "",
+    onCheckForUpdates: () -> Unit = {},
 ) {
     val contentPadding = PaddingValues(all = MaterialTheme.spacings.default)
 
@@ -177,6 +200,48 @@ private fun SettingsScreenLayout(
                     onAction = onAction,
                     modifier = Modifier.widthIn(max = 640.dp),
                 )
+            }
+            if (showUpdateCheckCard) {
+                item(key = "manual_update_check") {
+                    Surface(
+                        onClick = onCheckForUpdates,
+                        modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth(),
+                        enabled = !isCheckingUpdate,
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(MaterialTheme.spacings.medium),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                painter = painterResource(CoreR.drawable.ic_rotate_ccw),
+                                contentDescription = null,
+                            )
+                            Spacer(modifier = Modifier.width(MaterialTheme.spacings.default))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Buscar actualizaciones",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Spacer(modifier = Modifier.height(MaterialTheme.spacings.extraSmall))
+                                Text(
+                                    text =
+                                        updateStatusMessage
+                                            ?: "Versión v$currentVersionName • Toca para verificar en GitHub",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                            if (isCheckingUpdate) {
+                                Spacer(modifier = Modifier.width(MaterialTheme.spacings.small))
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

@@ -28,6 +28,14 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import timber.log.Timber
 
+sealed interface ManualUpdateCheckResult {
+    data class UpdateAvailable(val info: AppUpdateInfo) : ManualUpdateCheckResult
+
+    data class UpToDate(val currentVersion: String) : ManualUpdateCheckResult
+
+    data class Error(val message: String) : ManualUpdateCheckResult
+}
+
 @Singleton
 class AppUpdateManager
 @Inject
@@ -57,11 +65,20 @@ constructor(
     private val _availableUpdate = MutableStateFlow(loadPersistedValidUpdate())
     val availableUpdate: StateFlow<AppUpdateInfo?> = _availableUpdate.asStateFlow()
 
+    private val _isCheckingForUpdates = MutableStateFlow(false)
+    val isCheckingForUpdates: StateFlow<Boolean> = _isCheckingForUpdates.asStateFlow()
+
     private val _downloadProgress = MutableStateFlow<Float?>(null)
     val downloadProgress: StateFlow<Float?> = _downloadProgress.asStateFlow()
 
     private val _updateError = MutableStateFlow<String?>(null)
     val updateError: StateFlow<String?> = _updateError.asStateFlow()
+
+    val currentVersionName: String
+        get() = DataBuildConfig.VERSION_NAME
+
+    val updateRepo: String
+        get() = DataBuildConfig.UPDATE_REPO
 
     suspend fun checkForUpdates(force: Boolean = false): AppUpdateInfo? =
         withContext(Dispatchers.IO) {
@@ -101,15 +118,63 @@ constructor(
                 return@withContext null
             }
 
-            runCatching {
-                appPreferences.setValue(
-                    appPreferences.availableUpdateJson,
-                    json.encodeToString(remoteUpdate),
-                )
-            }
-            _availableUpdate.value = remoteUpdate
+            persistAvailableUpdate(remoteUpdate)
             remoteUpdate
         }
+
+    suspend fun checkForUpdatesManually(): ManualUpdateCheckResult =
+        withContext(Dispatchers.IO) {
+            _isCheckingForUpdates.value = true
+            try {
+                val manifestUrl = DataBuildConfig.UPDATE_MANIFEST_URL.trim()
+                val repo = DataBuildConfig.UPDATE_REPO.trim()
+                if (manifestUrl.isBlank() && repo.isBlank()) {
+                    return@withContext ManualUpdateCheckResult.Error(
+                        "No hay repositorio de actualizaciones configurado."
+                    )
+                }
+
+                val remoteUpdate = fetchFromManifest(manifestUrl) ?: fetchFromGitHub(repo)
+                if (remoteUpdate == null) {
+                    return@withContext ManualUpdateCheckResult.Error(
+                        "No se encontraron releases publicados en $repo o sin conexión."
+                    )
+                }
+
+                appPreferences.setValue(
+                    appPreferences.lastUpdateCheckEpochMs,
+                    System.currentTimeMillis(),
+                )
+
+                if (
+                    !AppUpdateParser.isUpdateNewer(
+                        remoteCode = remoteUpdate.versionCode,
+                        remoteName = remoteUpdate.versionName,
+                        currentCode = DataBuildConfig.VERSION_CODE,
+                        currentName = DataBuildConfig.VERSION_NAME,
+                    )
+                ) {
+                    clearPersistedUpdate()
+                    return@withContext ManualUpdateCheckResult.UpToDate(DataBuildConfig.VERSION_NAME)
+                }
+
+                appPreferences.setValue(appPreferences.dismissedUpdateVersion, null)
+                persistAvailableUpdate(remoteUpdate)
+                ManualUpdateCheckResult.UpdateAvailable(remoteUpdate)
+            } finally {
+                _isCheckingForUpdates.value = false
+            }
+        }
+
+    private fun persistAvailableUpdate(remoteUpdate: AppUpdateInfo) {
+        runCatching {
+            appPreferences.setValue(
+                appPreferences.availableUpdateJson,
+                json.encodeToString(remoteUpdate),
+            )
+        }
+        _availableUpdate.value = remoteUpdate
+    }
 
     suspend fun downloadAndInstall(info: AppUpdateInfo) =
         withContext(Dispatchers.IO) {

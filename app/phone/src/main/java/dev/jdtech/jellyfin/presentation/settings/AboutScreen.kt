@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -43,6 +45,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mikepenz.aboutlibraries.ui.compose.android.produceLibraries
 import com.mikepenz.aboutlibraries.ui.compose.m3.LibrariesContainer
 import dev.jdtech.jellyfin.BuildConfig
@@ -51,10 +55,32 @@ import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.settings.R as SettingsR
+import dev.jdtech.jellyfin.update.UpdateCheckViewModel
+
+@Composable
+fun AboutScreen(
+    navigateBack: () -> Unit,
+    updateViewModel: UpdateCheckViewModel = hiltViewModel(),
+) {
+    val isCheckingUpdate by updateViewModel.isChecking.collectAsStateWithLifecycle()
+    val updateStatusMessage by updateViewModel.statusMessage.collectAsStateWithLifecycle()
+
+    AboutScreenLayout(
+        navigateBack = navigateBack,
+        isCheckingUpdate = isCheckingUpdate,
+        updateStatusMessage = updateStatusMessage,
+        onCheckForUpdates = { updateViewModel.checkNow() },
+    )
+}
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun AboutScreen(navigateBack: () -> Unit) {
+private fun AboutScreenLayout(
+    navigateBack: () -> Unit,
+    isCheckingUpdate: Boolean = false,
+    updateStatusMessage: String? = null,
+    onCheckForUpdates: () -> Unit = {},
+) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val density = LocalDensity.current
@@ -119,6 +145,34 @@ fun AboutScreen(navigateBack: () -> Unit) {
                                 text = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                                 style = MaterialTheme.typography.bodyLarge,
                             )
+                            Spacer(Modifier.height(MaterialTheme.spacings.small))
+                            FilledTonalButton(
+                                onClick = onCheckForUpdates,
+                                enabled = !isCheckingUpdate,
+                            ) {
+                                Icon(
+                                    painter = painterResource(CoreR.drawable.ic_rotate_ccw),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(MaterialTheme.spacings.small))
+                                Text(
+                                    text =
+                                        if (isCheckingUpdate) {
+                                            "Buscando actualizaciones..."
+                                        } else {
+                                            "Buscar actualizaciones"
+                                        }
+                                )
+                            }
+                            if (updateStatusMessage != null) {
+                                Spacer(Modifier.height(MaterialTheme.spacings.extraSmall))
+                                Text(
+                                    text = updateStatusMessage,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
                             Spacer(Modifier.height(MaterialTheme.spacings.small))
                             Text(
                                 text = stringResource(CoreR.string.app_description),
@@ -186,5 +240,5 @@ fun AboutScreen(navigateBack: () -> Unit) {
 @Composable
 @PreviewScreenSizes
 private fun AboutScreenPreview() {
-    JellyxTheme { AboutScreen(navigateBack = {}) }
+    JellyxTheme { AboutScreenLayout(navigateBack = {}) }
 }

@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,6 +36,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -51,6 +54,7 @@ import dev.jdtech.jellyfin.settings.presentation.settings.SettingsAction
 import dev.jdtech.jellyfin.settings.presentation.settings.SettingsEvent
 import dev.jdtech.jellyfin.settings.presentation.settings.SettingsState
 import dev.jdtech.jellyfin.settings.presentation.settings.SettingsViewModel
+import dev.jdtech.jellyfin.update.UpdateCheckViewModel
 import dev.jdtech.jellyfin.utils.ObserveAsEvents
 import dev.jdtech.jellyfin.utils.restart
 import timber.log.Timber
@@ -61,10 +65,13 @@ fun SettingsScreen(
     navigateToServers: () -> Unit,
     navigateToUsers: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
+    updateViewModel: UpdateCheckViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
 
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val isCheckingUpdate by updateViewModel.isChecking.collectAsStateWithLifecycle()
+    val updateStatusMessage by updateViewModel.statusMessage.collectAsStateWithLifecycle()
 
     LaunchedEffect(true) { viewModel.loadPreferences(emptyList(), DeviceType.TV) }
 
@@ -104,11 +111,24 @@ fun SettingsScreen(
                 else -> Unit
             }
         },
+        isCheckingUpdate = isCheckingUpdate,
+        updateStatusMessage = updateStatusMessage,
+        currentVersionName = updateViewModel.currentVersionName,
+        updateRepo = updateViewModel.updateRepo,
+        onCheckForUpdates = { updateViewModel.checkNow() },
     )
 }
 
 @Composable
-private fun SettingsScreenLayout(state: SettingsState, onAction: (SettingsAction) -> Unit) {
+private fun SettingsScreenLayout(
+    state: SettingsState,
+    onAction: (SettingsAction) -> Unit,
+    isCheckingUpdate: Boolean = false,
+    updateStatusMessage: String? = null,
+    currentVersionName: String = "",
+    updateRepo: String = "",
+    onCheckForUpdates: () -> Unit = {},
+) {
     val focusRequester = remember { FocusRequester() }
     val context = LocalContext.current
     val launcherAlias = remember(context) {
@@ -123,6 +143,23 @@ private fun SettingsScreenLayout(state: SettingsState, onAction: (SettingsAction
                 .getOrDefault(false)
         )
     }
+
+    val actionCardShape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(10.dp))
+    val actionCardColors =
+        ClickableSurfaceDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            focusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            focusedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+    val actionCardBorder =
+        ClickableSurfaceDefaults.border(
+            focusedBorder =
+                Border(
+                    BorderStroke(3.dp, MaterialTheme.colorScheme.primary),
+                    shape = RoundedCornerShape(10.dp),
+                )
+        )
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
@@ -175,11 +212,9 @@ private fun SettingsScreenLayout(state: SettingsState, onAction: (SettingsAction
                         }
                     }
                 },
-                colors =
-                    ClickableSurfaceDefaults.colors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                        focusedContainerColor = MaterialTheme.colorScheme.inverseSurface,
-                    ),
+                shape = actionCardShape,
+                colors = actionCardColors,
+                border = actionCardBorder,
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -202,6 +237,38 @@ private fun SettingsScreenLayout(state: SettingsState, onAction: (SettingsAction
                                 } else {
                                     "Desactivado • Toca para habilitar Jellyx.tv como pantalla de inicio"
                                 },
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        }
+        item(span = { GridItemSpan(this.maxLineSpan) }) {
+            Surface(
+                onClick = onCheckForUpdates,
+                enabled = !isCheckingUpdate,
+                shape = actionCardShape,
+                colors = actionCardColors,
+                border = actionCardBorder,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(16.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(id = CoreR.drawable.ic_rotate_ccw),
+                        contentDescription = null,
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "Buscar actualizaciones",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text =
+                                updateStatusMessage
+                                    ?: "Versión actual: v$currentVersionName • Toca para buscar en GitHub ($updateRepo)",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
