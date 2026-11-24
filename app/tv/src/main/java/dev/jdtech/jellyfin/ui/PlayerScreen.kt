@@ -101,6 +101,8 @@ import dev.jdtech.jellyfin.ui.components.player.VideoPlayerSeeker
 import dev.jdtech.jellyfin.ui.components.player.VideoPlayerState
 import dev.jdtech.jellyfin.ui.components.player.rememberVideoPlayerState
 import dev.jdtech.jellyfin.ui.dialogs.VideoPlayerTrackSelectorDialog
+import dev.jdtech.jellyfin.utils.TvMediaKeyAction
+import dev.jdtech.jellyfin.utils.TvSeekKeyHelper
 import dev.jdtech.jellyfin.utils.handleDPadKeyEvents
 import java.time.Instant
 import java.time.ZoneId
@@ -134,21 +136,22 @@ fun PlayerScreen(
 
     var lifecycle by remember { mutableStateOf(Lifecycle.Event.ON_CREATE) }
     var mediaSession by remember { mutableStateOf<MediaSession?>(null) }
+    var activePlayer by remember { mutableStateOf(viewModel.player) }
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, activePlayer) {
         val observer = LifecycleEventObserver { _, event ->
             lifecycle = event
 
             // Handle creation and release of media session
-            when (lifecycle) {
+            when (event) {
                 Lifecycle.Event.ON_STOP -> {
-                    println("ON_STOP")
                     mediaSession?.release()
+                    mediaSession = null
                 }
 
                 Lifecycle.Event.ON_START -> {
-                    println("ON_START")
-                    mediaSession = MediaSession.Builder(context, viewModel.player).build()
+                    mediaSession?.release()
+                    mediaSession = MediaSession.Builder(context, activePlayer).build()
                 }
 
                 else -> {}
@@ -156,7 +159,11 @@ fun PlayerScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
 
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            mediaSession?.release()
+            mediaSession = null
+        }
     }
 
     val videoPlayerState = rememberVideoPlayerState()
@@ -166,9 +173,11 @@ fun PlayerScreen(
     var showEpisodesDrawer by remember { mutableStateOf(false) }
     var showStatsOverlay by remember { mutableStateOf(false) }
     var statsText by remember { mutableStateOf("") }
-    var activePlayer by remember { mutableStateOf(viewModel.player) }
     var seekFeedbackDeltaSeconds by remember { mutableStateOf<Int?>(null) }
     var seekFeedbackTrigger by remember { mutableLongStateOf(0L) }
+    var pendingSeekTargetMs by remember { mutableStateOf<Long?>(null) }
+    var pendingSeekCommitTrigger by remember { mutableLongStateOf(0L) }
+    var hasUncommittedSeek by remember { mutableStateOf(false) }
 
     BackHandler(enabled = showLiveChannelDrawer || showEpisodesDrawer) {
         showLiveChannelDrawer = false
@@ -179,6 +188,21 @@ fun PlayerScreen(
         if (seekFeedbackTrigger > 0L) {
             delay(1200)
             seekFeedbackDeltaSeconds = null
+            pendingSeekTargetMs = null
+            hasUncommittedSeek = false
+        }
+    }
+
+    LaunchedEffect(pendingSeekCommitTrigger) {
+        if (pendingSeekCommitTrigger > 0L) {
+            delay(180)
+            if (hasUncommittedSeek) {
+                pendingSeekTargetMs?.let { target ->
+                    activePlayer.seekTo(target)
+                    viewModel.notifySyncPlaySeek(target)
+                }
+                hasUncommittedSeek = false
+            }
         }
     }
 
@@ -207,7 +231,9 @@ fun PlayerScreen(
     LaunchedEffect(activePlayer) {
         while (true) {
             delay(300)
-            currentPosition = activePlayer.currentPosition
+            if (pendingSeekTargetMs == null) {
+                currentPosition = activePlayer.currentPosition
+            }
             isPlaying = activePlayer.isPlaying
             isBuffering = activePlayer.playbackState == Player.STATE_BUFFERING
             bufferAheadSec = viewModel.getLiveBufferAheadSec()
@@ -224,6 +250,8 @@ fun PlayerScreen(
         showSyncPlayDialog,
         showLiveChannelDrawer,
         showEpisodesDrawer,
+        uiState.currentSegment,
+        uiState.playbackEnded,
     ) {
         if (showLiveChannelDrawer || showEpisodesDrawer) {
             videoPlayerState.hideControls()
@@ -231,8 +259,49 @@ fun PlayerScreen(
             videoPlayerState.showControls(seconds = Int.MAX_VALUE)
         } else if (videoPlayerState.controlsVisible && isPlaying) {
             videoPlayerState.showControls()
-        } else if (!videoPlayerState.controlsVisible) {
+        } else if (
+            !videoPlayerState.controlsVisible &&
+                !showLiveChannelDrawer &&
+                !showEpisodesDrawer &&
+                activeTrackSelectorType == null &&
+                !showSyncPlayDialog &&
+                !uiState.playbackEnded &&
+                uiState.currentSegment == null
+        ) {
             runCatching { playerBoxFocusRequester.requestFocus() }
+            delay(350L)
+            runCatching { playerBoxFocusRequester.requestFocus() }
+        }
+    }
+
+    fun performIncrementalSeek(direction: Int, repeatCount: Int) {
+        val stepMs = TvSeekKeyHelper.computeSeekStepMs(repeatCount)
+        val basePos = pendingSeekTargetMs ?: activePlayer.currentPosition.coerceAtLeast(0L)
+        val targetMs =
+            TvSeekKeyHelper.computeNextSeekPosition(
+                basePositionMs = basePos,
+                deltaMs = direction * stepMs,
+                durationMs = activePlayer.duration,
+            )
+        pendingSeekTargetMs = targetMs
+        currentPosition = targetMs
+        val deltaSec = (direction * (stepMs / 1000L)).toInt()
+        seekFeedbackDeltaSeconds =
+            (seekFeedbackDeltaSeconds ?: 0).let { prev ->
+                if ((prev < 0 && deltaSec < 0) || (prev > 0 && deltaSec > 0)) {
+                    prev + deltaSec
+                } else {
+                    deltaSec
+                }
+            }
+        seekFeedbackTrigger++
+        if (repeatCount == 0) {
+            activePlayer.seekTo(targetMs)
+            viewModel.notifySyncPlaySeek(targetMs)
+            hasUncommittedSeek = false
+        } else {
+            hasUncommittedSeek = true
+            pendingSeekCommitTrigger++
         }
     }
 
@@ -270,69 +339,167 @@ fun PlayerScreen(
             Modifier.focusRequester(playerBoxFocusRequester)
                 .onPreviewKeyEvent { keyEvent ->
                     val keyCode = keyEvent.nativeKeyEvent.keyCode
-                    if (keyEvent.type == KeyEventType.KeyDown) {
-                        when (keyCode) {
-                            android.view.KeyEvent.KEYCODE_CHANNEL_UP -> viewModel.switchChannel(1)
-                            android.view.KeyEvent.KEYCODE_CHANNEL_DOWN -> viewModel.switchChannel(-1)
-                            android.view.KeyEvent.KEYCODE_DPAD_LEFT
-                                if !videoPlayerState.controlsVisible &&
-                                    !showLiveChannelDrawer &&
-                                    !showEpisodesDrawer &&
-                                    activeTrackSelectorType == null -> {
-                                if (uiState.isLiveTv) {
-                                    showLiveChannelDrawer = true
-                                } else {
-                                    activePlayer.seekTo(
-                                        (activePlayer.currentPosition - 10_000L).coerceAtLeast(0L)
-                                    )
-                                    seekFeedbackDeltaSeconds =
-                                        (seekFeedbackDeltaSeconds ?: 0).let {
-                                            if (it < 0) it - 10 else -10
-                                        }
-                                    seekFeedbackTrigger++
+                    val repeatCount = keyEvent.nativeKeyEvent.repeatCount
+                    val action = TvSeekKeyHelper.classifyKeyCode(keyCode)
+                    val isModalOrDrawerOpen =
+                        showLiveChannelDrawer ||
+                            showEpisodesDrawer ||
+                            activeTrackSelectorType != null ||
+                            showSyncPlayDialog ||
+                            uiState.playbackEnded
+
+                    if (isModalOrDrawerOpen) {
+                        return@onPreviewKeyEvent false
+                    }
+
+                    when (keyEvent.type) {
+                        KeyEventType.KeyDown -> {
+                            when (action) {
+                                TvMediaKeyAction.CHANNEL_UP -> {
+                                    if (repeatCount == 0) {
+                                        viewModel.switchChannel(1)
+                                    }
+                                    true
                                 }
-                                true
-                            }
-                            android.view.KeyEvent.KEYCODE_DPAD_RIGHT
-                                if !videoPlayerState.controlsVisible &&
-                                    !showLiveChannelDrawer &&
-                                    !showEpisodesDrawer &&
-                                    activeTrackSelectorType == null &&
-                                    !uiState.isLiveTv -> {
-                                val duration = activePlayer.duration
-                                val target =
-                                    if (duration > 0L) {
-                                        (activePlayer.currentPosition + 10_000L).coerceAtMost(
-                                            duration
-                                        )
+                                TvMediaKeyAction.CHANNEL_DOWN -> {
+                                    if (repeatCount == 0) {
+                                        viewModel.switchChannel(-1)
+                                    }
+                                    true
+                                }
+                                TvMediaKeyAction.SEEK_BACKWARD -> {
+                                    if (!uiState.isLiveTv) {
+                                        performIncrementalSeek(-1, repeatCount)
+                                        if (videoPlayerState.controlsVisible) {
+                                            videoPlayerState.showControls()
+                                        }
+                                        true
                                     } else {
-                                        activePlayer.currentPosition + 10_000L
+                                        false
                                     }
-                                activePlayer.seekTo(target)
-                                seekFeedbackDeltaSeconds =
-                                    (seekFeedbackDeltaSeconds ?: 0).let {
-                                        if (it > 0) it + 10 else 10
+                                }
+                                TvMediaKeyAction.SEEK_FORWARD -> {
+                                    if (!uiState.isLiveTv) {
+                                        performIncrementalSeek(1, repeatCount)
+                                        if (videoPlayerState.controlsVisible) {
+                                            videoPlayerState.showControls()
+                                        }
+                                        true
+                                    } else {
+                                        false
                                     }
-                                seekFeedbackTrigger++
-                                true
+                                }
+                                TvMediaKeyAction.PLAY_PAUSE -> {
+                                    if (repeatCount == 0) {
+                                        val shouldPlay = !activePlayer.isPlaying
+                                        if (shouldPlay) {
+                                            activePlayer.play()
+                                        } else {
+                                            activePlayer.pause()
+                                        }
+                                        viewModel.notifySyncPlayPlayPause(shouldPlay)
+                                        videoPlayerState.showControls()
+                                    }
+                                    true
+                                }
+                                TvMediaKeyAction.PLAY -> {
+                                    if (repeatCount == 0) {
+                                        activePlayer.play()
+                                        viewModel.notifySyncPlayPlayPause(true)
+                                        videoPlayerState.showControls()
+                                    }
+                                    true
+                                }
+                                TvMediaKeyAction.PAUSE -> {
+                                    if (repeatCount == 0) {
+                                        activePlayer.pause()
+                                        viewModel.notifySyncPlayPlayPause(false)
+                                        videoPlayerState.showControls(Int.MAX_VALUE)
+                                    }
+                                    true
+                                }
+                                TvMediaKeyAction.DPAD_LEFT -> {
+                                    if (!videoPlayerState.controlsVisible) {
+                                        if (uiState.isLiveTv) {
+                                            if (repeatCount == 0) {
+                                                showLiveChannelDrawer = true
+                                            }
+                                        } else {
+                                            performIncrementalSeek(-1, repeatCount)
+                                        }
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                TvMediaKeyAction.DPAD_RIGHT -> {
+                                    if (!videoPlayerState.controlsVisible && !uiState.isLiveTv) {
+                                        performIncrementalSeek(1, repeatCount)
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                else -> false
                             }
-                            else -> false
                         }
-                    } else if (
-                        keyEvent.type == KeyEventType.KeyUp &&
-                            !videoPlayerState.controlsVisible &&
-                            !showLiveChannelDrawer &&
-                            !showEpisodesDrawer &&
-                            activeTrackSelectorType == null &&
-                            ((keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
-                                videoPlayerState.wasRecentlyHidden()) ||
-                                (!uiState.isLiveTv &&
-                                    (keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT ||
-                                        keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT)))
-                    ) {
-                        true
-                    } else {
-                        false
+                        KeyEventType.KeyUp -> {
+                            when (action) {
+                                TvMediaKeyAction.SEEK_BACKWARD,
+                                TvMediaKeyAction.SEEK_FORWARD -> {
+                                    if (!uiState.isLiveTv) {
+                                        if (hasUncommittedSeek) {
+                                            pendingSeekTargetMs?.let { target ->
+                                                activePlayer.seekTo(target)
+                                                viewModel.notifySyncPlaySeek(target)
+                                            }
+                                            hasUncommittedSeek = false
+                                        }
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                TvMediaKeyAction.DPAD_LEFT -> {
+                                    if (!videoPlayerState.controlsVisible) {
+                                        if (!uiState.isLiveTv && hasUncommittedSeek) {
+                                            pendingSeekTargetMs?.let { target ->
+                                                activePlayer.seekTo(target)
+                                                viewModel.notifySyncPlaySeek(target)
+                                            }
+                                            hasUncommittedSeek = false
+                                        }
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                TvMediaKeyAction.DPAD_RIGHT -> {
+                                    if (!videoPlayerState.controlsVisible && !uiState.isLiveTv) {
+                                        if (hasUncommittedSeek) {
+                                            pendingSeekTargetMs?.let { target ->
+                                                activePlayer.seekTo(target)
+                                                viewModel.notifySyncPlaySeek(target)
+                                            }
+                                            hasUncommittedSeek = false
+                                        }
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                TvMediaKeyAction.PLAY_PAUSE,
+                                TvMediaKeyAction.PLAY,
+                                TvMediaKeyAction.PAUSE,
+                                TvMediaKeyAction.CHANNEL_UP,
+                                TvMediaKeyAction.CHANNEL_DOWN -> true
+                                else ->
+                                    !videoPlayerState.controlsVisible &&
+                                        keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
+                                        videoPlayerState.wasRecentlyHidden()
+                            }
+                        }
+                        else -> false
                     }
                 }
                 .dPadEvents(
@@ -348,6 +515,9 @@ fun PlayerScreen(
                     playerView.player = activePlayer
                     playerView.useController = false
                     playerView.setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                    playerView.isFocusable = false
+                    playerView.isFocusableInTouchMode = false
+                    playerView.descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                     playerView.subtitleView?.apply {
                         setApplyEmbeddedStyles(false)
                         setApplyEmbeddedFontSizes(false)
@@ -515,7 +685,11 @@ fun PlayerScreen(
         }
         seekFeedbackDeltaSeconds?.let { delta ->
             if (!videoPlayerState.controlsVisible) {
-                val label = if (delta >= 0) "⏩ +${delta}s" else "⏪ ${delta}s"
+                val baseLabel = if (delta >= 0) "⏩ +${delta}s" else "⏪ ${delta}s"
+                val label =
+                    pendingSeekTargetMs?.let { targetMs ->
+                        "$baseLabel  •  ${TvSeekKeyHelper.formatTimestampMs(targetMs)}"
+                    } ?: baseLabel
                 Box(
                     modifier =
                         Modifier.align(Alignment.BottomCenter)
@@ -760,9 +934,13 @@ fun VideoPlayerControls(
                     isPlaying = isPlaying,
                     onPlayPauseToggle = onPlayPauseToggle,
                     onSeek = { fraction ->
-                        val targetMs = player.duration.times(fraction).toLong()
-                        player.seekTo(targetMs)
-                        onSeekSync(targetMs)
+                        val durationMs = player.duration
+                        if (durationMs > 0L) {
+                            val targetMs =
+                                (durationMs * fraction).toLong().coerceIn(0L, durationMs)
+                            player.seekTo(targetMs)
+                            onSeekSync(targetMs)
+                        }
                     },
                     contentProgress = contentCurrentPosition.milliseconds,
                     contentDuration = player.duration.milliseconds,

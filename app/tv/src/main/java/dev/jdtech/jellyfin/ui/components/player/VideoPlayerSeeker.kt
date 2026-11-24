@@ -8,6 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -23,6 +27,7 @@ import dev.jdtech.jellyfin.core.R as CoreR
 import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun VideoPlayerSeeker(
@@ -34,14 +39,31 @@ fun VideoPlayerSeeker(
     contentProgress: Duration,
     contentDuration: Duration,
 ) {
-    val contentProgressString = contentProgress.toComponents { h, m, s, _ ->
+    val durationMs = contentDuration.inWholeMilliseconds.coerceAtLeast(0L)
+    val safeDuration = durationMs.milliseconds
+    val safeProgress =
+        if (durationMs > 0L) {
+            (contentProgress / contentDuration).toFloat().coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+    var scrubPreviewProgress by remember { mutableStateOf<Float?>(null) }
+
+    val displayedProgress =
+        if (scrubPreviewProgress != null && durationMs > 0L) {
+            (durationMs * scrubPreviewProgress!!.coerceIn(0f, 1f)).toLong().milliseconds
+        } else {
+            contentProgress.coerceAtLeast(Duration.ZERO)
+        }
+
+    val contentProgressString = displayedProgress.toComponents { h, m, s, _ ->
         if (h > 0) {
             "$h:${m.padStartWith0()}:${s.padStartWith0()}"
         } else {
             "${m.padStartWith0()}:${s.padStartWith0()}"
         }
     }
-    val contentDurationString = contentDuration.toComponents { h, m, s, _ ->
+    val contentDurationString = safeDuration.toComponents { h, m, s, _ ->
         if (h > 0) {
             "$h:${m.padStartWith0()}:${s.padStartWith0()}"
         } else {
@@ -85,9 +107,14 @@ fun VideoPlayerSeeker(
             }
             Spacer(modifier = Modifier.height(MaterialTheme.spacings.small))
             VideoPlayerSeekBar(
-                progress = (contentProgress / contentDuration).toFloat(),
+                progress = safeProgress,
                 onSeek = onSeek,
                 state = state,
+                durationMs = durationMs,
+                onPlayPauseToggle = { onPlayPauseToggle(!isPlaying) },
+                onScrubbingChanged = { isScrubbing, preview ->
+                    scrubPreviewProgress = if (isScrubbing) preview else null
+                },
             )
         }
     }

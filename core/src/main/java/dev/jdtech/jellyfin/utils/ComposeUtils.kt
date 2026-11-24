@@ -91,32 +91,37 @@ fun Modifier.handleDPadKeyEvents(
         when (it.nativeKeyEvent.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT,
             KeyEvent.KEYCODE_SYSTEM_NAVIGATION_LEFT -> {
-                onLeft?.invoke().also {
+                if (onLeft != null) {
+                    onLeft.invoke()
                     return@onKeyEvent true
                 }
             }
             KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_SYSTEM_NAVIGATION_RIGHT -> {
-                onRight?.invoke().also {
+                if (onRight != null) {
+                    onRight.invoke()
                     return@onKeyEvent true
                 }
             }
             KeyEvent.KEYCODE_DPAD_UP,
             KeyEvent.KEYCODE_SYSTEM_NAVIGATION_UP -> {
-                onUp?.invoke().also {
+                if (onUp != null) {
+                    onUp.invoke()
                     return@onKeyEvent true
                 }
             }
             KeyEvent.KEYCODE_DPAD_DOWN,
             KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN -> {
-                onDown?.invoke().also {
+                if (onDown != null) {
+                    onDown.invoke()
                     return@onKeyEvent true
                 }
             }
             KeyEvent.KEYCODE_DPAD_CENTER,
             KeyEvent.KEYCODE_ENTER,
             KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                onEnter?.invoke().also {
+                if (onEnter != null) {
+                    onEnter.invoke()
                     return@onKeyEvent true
                 }
             }
