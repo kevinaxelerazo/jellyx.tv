@@ -11,7 +11,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,21 +34,25 @@ fun DiscoveredServerItem(name: String, modifier: Modifier = Modifier, onClick: (
             onClick = onClick,
             colors =
                 ClickableSurfaceDefaults.colors(
-                    containerColor = Color(0xFF132026),
-                    focusedContainerColor = Color(0xFF132026),
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    focusedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 ),
             shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(16.dp)),
             border =
                 ClickableSurfaceDefaults.border(
                     focusedBorder =
-                        Border(BorderStroke(4.dp, Color.White), shape = RoundedCornerShape(16.dp))
+                        Border(
+                            BorderStroke(4.dp, MaterialTheme.colorScheme.primary),
+                            shape = RoundedCornerShape(16.dp),
+                        )
                 ),
             modifier = Modifier.fillMaxWidth().aspectRatio(1f),
         ) {
             Icon(
                 painter = painterResource(CoreR.drawable.ic_server),
                 contentDescription = null,
-                tint = Color.White,
                 modifier = Modifier.align(Alignment.Center),
             )
         }
@@ -57,7 +60,7 @@ fun DiscoveredServerItem(name: String, modifier: Modifier = Modifier, onClick: (
         Text(
             text = name,
             style = MaterialTheme.typography.labelMedium,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onBackground,
             maxLines = 1,
             textAlign = TextAlign.Center,
             overflow = TextOverflow.Ellipsis,

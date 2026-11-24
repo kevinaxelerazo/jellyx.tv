@@ -155,9 +155,11 @@ fun LiveTvScreen(
                         focusedTextColor = MaterialTheme.colorScheme.onBackground,
                         unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
-                        focusedContainerColor = Color(0xFF101520),
-                        unfocusedContainerColor = Color(0xAA101520),
+                        unfocusedBorderColor =
+                            MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor =
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
                     ),
                 shape = RoundedCornerShape(10.dp),
                 modifier =

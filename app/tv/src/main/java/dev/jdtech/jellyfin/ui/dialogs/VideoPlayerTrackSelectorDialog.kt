@@ -73,14 +73,19 @@ fun VideoPlayerTrackSelectorDialog(
                         colors =
                             ClickableSurfaceDefaults.colors(
                                 containerColor = Color.Transparent,
-                                focusedContainerColor = Color.Transparent,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                focusedContainerColor =
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                                focusedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                                 disabledContainerColor = Color.Transparent,
+                                disabledContentColor =
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                             ),
                         border =
                             ClickableSurfaceDefaults.border(
                                 focusedBorder =
                                     Border(
-                                        BorderStroke(4.dp, Color.White),
+                                        BorderStroke(4.dp, MaterialTheme.colorScheme.primary),
                                         shape = RoundedCornerShape(10.dp),
                                     )
                             ),

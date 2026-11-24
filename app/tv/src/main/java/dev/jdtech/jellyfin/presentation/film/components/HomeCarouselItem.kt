@@ -51,7 +51,10 @@ fun HomeCarouselItem(item: JellyxItem, onAction: (HomeAction) -> Unit) {
         border =
             ClickableSurfaceDefaults.border(
                 focusedBorder =
-                    Border(BorderStroke(4.dp, Color.White), shape = MaterialTheme.shapes.large)
+                    Border(
+                        BorderStroke(4.dp, MaterialTheme.colorScheme.primary),
+                        shape = MaterialTheme.shapes.large,
+                    )
             ),
         scale = ClickableSurfaceScale.None,
     ) {

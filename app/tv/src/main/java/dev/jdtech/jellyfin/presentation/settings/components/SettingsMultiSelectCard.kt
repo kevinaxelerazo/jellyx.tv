@@ -13,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -61,13 +60,19 @@ fun SettingsMultiSelectCard(
         colors =
             ClickableSurfaceDefaults.colors(
                 containerColor = MaterialTheme.colorScheme.surface,
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                focusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                focusedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 disabledContainerColor = MaterialTheme.colorScheme.surface,
+                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
             ),
         border =
             ClickableSurfaceDefaults.border(
                 focusedBorder =
-                    Border(BorderStroke(4.dp, Color.White), shape = RoundedCornerShape(10.dp))
+                    Border(
+                        BorderStroke(3.dp, MaterialTheme.colorScheme.primary),
+                        shape = RoundedCornerShape(10.dp),
+                    )
             ),
         scale = ClickableSurfaceScale.None,
         modifier = modifier.fillMaxWidth(),

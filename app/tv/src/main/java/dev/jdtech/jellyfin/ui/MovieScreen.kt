@@ -1,5 +1,6 @@
 package dev.jdtech.jellyfin.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,7 +39,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.tv.material3.Border
 import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
@@ -159,11 +162,25 @@ private fun MovieScreenLayout(state: MovieState, onAction: (MovieAction) -> Unit
                         modifier = Modifier.width(640.dp),
                     )
                     Spacer(modifier = Modifier.height(MaterialTheme.spacings.default))
+                    val actionButtonColors =
+                        ButtonDefaults.colors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            focusedContainerColor = MaterialTheme.colorScheme.primary,
+                            focusedContentColor = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    val actionButtonBorder =
+                        ButtonDefaults.border(
+                            focusedBorder =
+                                Border(BorderStroke(3.dp, MaterialTheme.colorScheme.onBackground))
+                        )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacings.medium)
                     ) {
                         Button(
                             onClick = { onAction(MovieAction.Play(startFromBeginning = false)) },
+                            colors = actionButtonColors,
+                            border = actionButtonBorder,
                             modifier = Modifier.focusRequester(focusRequester),
                         ) {
                             Icon(
@@ -174,7 +191,11 @@ private fun MovieScreenLayout(state: MovieState, onAction: (MovieAction) -> Unit
                             Text(text = stringResource(id = CoreR.string.play))
                         }
                         movie.trailer?.let { trailerUri ->
-                            Button(onClick = { onAction(MovieAction.PlayTrailer(trailerUri)) }) {
+                            Button(
+                                onClick = { onAction(MovieAction.PlayTrailer(trailerUri)) },
+                                colors = actionButtonColors,
+                                border = actionButtonBorder,
+                            ) {
                                 Icon(
                                     painter = painterResource(id = CoreR.drawable.ic_film),
                                     contentDescription = null,
@@ -189,7 +210,9 @@ private fun MovieScreenLayout(state: MovieState, onAction: (MovieAction) -> Unit
                                     true -> onAction(MovieAction.UnmarkAsPlayed)
                                     false -> onAction(MovieAction.MarkAsPlayed)
                                 }
-                            }
+                            },
+                            colors = actionButtonColors,
+                            border = actionButtonBorder,
                         ) {
                             Icon(
                                 painter = painterResource(id = CoreR.drawable.ic_check),
@@ -212,7 +235,9 @@ private fun MovieScreenLayout(state: MovieState, onAction: (MovieAction) -> Unit
                                     true -> onAction(MovieAction.UnmarkAsFavorite)
                                     false -> onAction(MovieAction.MarkAsFavorite)
                                 }
-                            }
+                            },
+                            colors = actionButtonColors,
+                            border = actionButtonBorder,
                         ) {
                             Icon(
                                 painter =
@@ -243,7 +268,7 @@ private fun MovieScreenLayout(state: MovieState, onAction: (MovieAction) -> Unit
                             Text(
                                 text = stringResource(id = CoreR.string.genres),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White.copy(alpha = .5f),
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
                             )
                             Text(
                                 text = movie.genres.joinToString(),
@@ -255,7 +280,8 @@ private fun MovieScreenLayout(state: MovieState, onAction: (MovieAction) -> Unit
                                 Text(
                                     text = stringResource(id = CoreR.string.director),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = Color.White.copy(alpha = .5f),
+                                    color =
+                                        MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
                                 )
                                 Text(
                                     text = director.name,
@@ -267,7 +293,7 @@ private fun MovieScreenLayout(state: MovieState, onAction: (MovieAction) -> Unit
                             Text(
                                 text = stringResource(id = CoreR.string.writers),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White.copy(alpha = .5f),
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
                             )
                             Text(
                                 text = state.writers.joinToString { it.name },

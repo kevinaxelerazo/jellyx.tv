@@ -13,12 +13,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
@@ -38,16 +38,18 @@ fun ServerItem(
         onLongClick = onLongClick,
         colors =
             ClickableSurfaceDefaults.colors(
-                containerColor = Color(0xFF132026),
-                focusedContainerColor = Color(0xFF132026),
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                focusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                focusedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             ),
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(16.dp)),
         border =
             ClickableSurfaceDefaults.border(
                 focusedBorder =
                     Border(
-                        BorderStroke(4.dp, Color.White),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                        BorderStroke(4.dp, MaterialTheme.colorScheme.primary),
+                        shape = RoundedCornerShape(16.dp),
                     )
             ),
         modifier = Modifier.width(270.dp).height(115.dp),
@@ -66,13 +68,12 @@ fun ServerItem(
                 Text(
                     text = name,
                     style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 )
                 Text(
                     text = address,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFBDBDBD),
+                    color = LocalContentColor.current.copy(alpha = 0.72f),
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 )

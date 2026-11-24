@@ -47,12 +47,24 @@ fun UserItem(
             colors =
                 ClickableSurfaceDefaults.colors(
                     containerColor = Color.Transparent,
-                    focusedContainerColor = Color.Transparent,
+                    focusedContainerColor =
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
                 ),
             border =
                 ClickableSurfaceDefaults.border(
-                    border = Border(BorderStroke(1.dp, Color.White), shape = CircleShape),
-                    focusedBorder = Border(BorderStroke(4.dp, Color.White), shape = CircleShape),
+                    border =
+                        Border(
+                            BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f),
+                            ),
+                            shape = CircleShape,
+                        ),
+                    focusedBorder =
+                        Border(
+                            BorderStroke(4.dp, MaterialTheme.colorScheme.primary),
+                            shape = CircleShape,
+                        ),
                 ),
             shape = ClickableSurfaceDefaults.shape(shape = CircleShape, focusedShape = CircleShape),
             modifier = Modifier.fillMaxWidth().aspectRatio(1f),
@@ -60,7 +72,7 @@ fun UserItem(
             Icon(
                 painter = painterResource(id = CoreR.drawable.ic_user),
                 contentDescription = null,
-                tint = Color.White,
+                tint = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.width(48.dp).height(48.dp).align(Alignment.Center),
             )
             AsyncImage(

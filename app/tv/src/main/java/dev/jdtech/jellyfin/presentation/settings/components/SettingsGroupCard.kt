@@ -1,5 +1,6 @@
 package dev.jdtech.jellyfin.presentation.settings.components
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +14,7 @@ import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
@@ -49,8 +51,19 @@ fun SettingsGroupCard(
         }
         Surface(
             shape = MaterialTheme.shapes.medium,
-            colors = SurfaceDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
-            modifier = modifier.fillMaxWidth(),
+            colors =
+                SurfaceDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ),
+            modifier =
+                modifier
+                    .fillMaxWidth()
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f),
+                        MaterialTheme.shapes.medium,
+                    ),
         ) {
             Column {
                 group.preferences.fastForEachIndexed { index, preference ->
