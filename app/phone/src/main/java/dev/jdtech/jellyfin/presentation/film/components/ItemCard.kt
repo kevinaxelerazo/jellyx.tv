@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -21,13 +22,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.jdtech.jellyfin.core.R
+import dev.jdtech.jellyfin.core.presentation.components.CompactRatingsOverlay
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyEpisode
 import dev.jdtech.jellyfin.core.presentation.dummy.dummyMovie
 import dev.jdtech.jellyfin.models.JellyxEpisode
 import dev.jdtech.jellyfin.models.JellyxItem
+import dev.jdtech.jellyfin.models.JellyxRatings
 import dev.jdtech.jellyfin.models.JellyxSeason
 import dev.jdtech.jellyfin.models.isDownloaded
 import dev.jdtech.jellyfin.models.isDownloading
+import dev.jdtech.jellyfin.models.toNativeRatings
 import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.presentation.theme.spacings
 
@@ -38,6 +42,8 @@ fun ItemCard(
     onClick: (JellyxItem) -> Unit,
     modifier: Modifier = Modifier,
     showSeriesName: Boolean = false,
+    ratings: JellyxRatings? = null,
+    showRatingsOverlay: Boolean = false,
 ) {
     val width =
         when (direction) {
@@ -62,19 +68,28 @@ fun ItemCard(
                     if (item.played) PlayedBadge()
                     item.unplayedItemCount?.takeIf { it > 0 }?.let { ItemCountBadge(it) }
                 }
+                val downloadBadgeAlignment =
+                    if (showRatingsOverlay) Alignment.TopStart else Alignment.BottomEnd
                 when {
                     item.isDownloading() ->
                         DownloadingPieBadge(
                             modifier =
-                                Modifier.align(Alignment.BottomEnd)
+                                Modifier.align(downloadBadgeAlignment)
                                     .padding(MaterialTheme.spacings.small)
                         )
                     item.isDownloaded() ->
                         DownloadedBadge(
                             modifier =
-                                Modifier.align(Alignment.BottomEnd)
+                                Modifier.align(downloadBadgeAlignment)
                                     .padding(MaterialTheme.spacings.small)
                         )
+                }
+                if (showRatingsOverlay) {
+                    val effectiveRatings = ratings ?: item.toNativeRatings()
+                    CompactRatingsOverlay(
+                        ratings = effectiveRatings,
+                        modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter),
+                    )
                 }
                 if (direction == Direction.HORIZONTAL) {
                     val progressWidth =

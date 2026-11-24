@@ -58,7 +58,8 @@ android {
                 .getProperty("JELLYX_OMDB_API_KEY")
                 ?.trim()
                 .orEmpty()
-                .replace("\\", "\\\"")
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
         val mdblistApiKey =
             localProperties
                 .getProperty("JELLYX_MDBLIST_API_KEY")

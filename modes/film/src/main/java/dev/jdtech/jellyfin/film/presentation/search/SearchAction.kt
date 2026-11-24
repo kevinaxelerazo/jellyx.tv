@@ -5,5 +5,7 @@ import dev.jdtech.jellyfin.models.JellyxItem
 sealed interface SearchAction {
     data class Search(val query: String) : SearchAction
 
+    data class SelectPlatform(val platformId: String) : SearchAction
+
     data class OnItemClick(val item: JellyxItem) : SearchAction
 }

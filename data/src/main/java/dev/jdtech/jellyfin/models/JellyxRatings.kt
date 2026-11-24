@@ -27,8 +27,17 @@ fun JellyxItem.toNativeRatings(): JellyxRatings {
     val rtStatus = rtPct?.let {
         if (it >= 60) RottenTomatoesStatus.FRESH else RottenTomatoesStatus.ROTTEN
     }
+    val hasTmdbId =
+        providerIds.entries.any { it.key.equals("Tmdb", ignoreCase = true) && it.value.isNotBlank() }
+    val tmdbPct =
+        if (hasTmdbId && communityRating != null) {
+            (communityRating * 10f).roundToInt().coerceIn(0, 100)
+        } else {
+            null
+        }
     return JellyxRatings(
         imdbRating = communityRating,
+        tmdbPercentage = tmdbPct,
         rtCriticPercentage = rtPct,
         rtCriticStatus = rtStatus,
     )

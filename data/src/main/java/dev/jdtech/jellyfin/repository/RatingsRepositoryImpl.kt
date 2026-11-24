@@ -70,6 +70,7 @@ class RatingsRepositoryImpl(
         communityRating: Float?,
         criticRating: Float?,
         providerIds: Map<String, String>,
+        isSeries: Boolean,
     ): JellyxRatings =
         withContext(Dispatchers.IO) {
             val native = extractNativeRatings(communityRating, criticRating)
@@ -88,7 +89,10 @@ class RatingsRepositoryImpl(
             val hasApiKeys =
                 omdbApiKey.isNotBlank() || tmdbApiKey.isNotBlank() || mdblistApiKey.isNotBlank()
             if (!hasApiKeys || (imdbId.isNullOrBlank() && tmdbId.isNullOrBlank())) {
-                return@withContext native
+                return@withContext native.copy(
+                    tmdbPercentage =
+                        native.tmdbPercentage ?: deriveTmdbFromCommunity(communityRating, tmdbId)
+                )
             }
 
             var imdbScore = native.imdbRating
@@ -118,7 +122,11 @@ class RatingsRepositoryImpl(
             }
 
             if (tmdbPct == null && tmdbApiKey.isNotBlank() && !tmdbId.isNullOrBlank()) {
-                tmdbPct = fetchTmdbPercentage(tmdbId)
+                tmdbPct = fetchTmdbPercentage(tmdbId = tmdbId, isSeries = isSeries)
+            }
+
+            if (tmdbPct == null) {
+                tmdbPct = deriveTmdbFromCommunity(communityRating, tmdbId)
             }
 
             val dto =
@@ -135,6 +143,13 @@ class RatingsRepositoryImpl(
             dto.toJellyxRatings()
         }
 
+    private fun deriveTmdbFromCommunity(communityRating: Float?, tmdbId: String?): Int? =
+        if (!tmdbId.isNullOrBlank() && communityRating != null) {
+            (communityRating * 10f).roundToInt().coerceIn(0, 100)
+        } else {
+            null
+        }
+
     private fun mergeRatings(native: JellyxRatings, cached: JellyxRatings): JellyxRatings {
         val rtPct = cached.rtCriticPercentage ?: native.rtCriticPercentage
         val rtStatus = rtPct?.let {
@@ -143,7 +158,7 @@ class RatingsRepositoryImpl(
         }
         return JellyxRatings(
             imdbRating = cached.imdbRating ?: native.imdbRating,
-            tmdbPercentage = cached.tmdbPercentage,
+            tmdbPercentage = cached.tmdbPercentage ?: native.tmdbPercentage,
             rtCriticPercentage = rtPct,
             rtCriticStatus = rtStatus,
             rtAudiencePercentage = cached.rtAudiencePercentage,
@@ -230,9 +245,16 @@ class RatingsRepositoryImpl(
             .getOrNull()
     }
 
-    private fun fetchTmdbPercentage(tmdbId: String): Int? {
+    private fun fetchTmdbPercentage(tmdbId: String, isSeries: Boolean = false): Int? {
+        val primaryType = if (isSeries) "tv" else "movie"
+        val fallbackType = if (isSeries) "movie" else "tv"
+        return fetchTmdbEndpointPercentage(primaryType, tmdbId)
+            ?: fetchTmdbEndpointPercentage(fallbackType, tmdbId)
+    }
+
+    private fun fetchTmdbEndpointPercentage(mediaType: String, tmdbId: String): Int? {
         return runCatching {
-            val url = "https://api.themoviedb.org/3/movie/$tmdbId?api_key=$tmdbApiKey"
+            val url = "https://api.themoviedb.org/3/$mediaType/$tmdbId?api_key=$tmdbApiKey"
             val request = Request.Builder().url(url).build()
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@runCatching null
@@ -243,7 +265,7 @@ class RatingsRepositoryImpl(
                 else (voteAverage * 10.0).roundToInt().coerceIn(0, 100)
             }
         }
-            .onFailure { Timber.w(it, "TMDb fetch failed") }
+            .onFailure { Timber.w(it, "TMDb fetch failed (%s)", mediaType) }
             .getOrNull()
     }
 

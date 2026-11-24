@@ -14,5 +14,6 @@ interface RatingsRepository {
         communityRating: Float?,
         criticRating: Float?,
         providerIds: Map<String, String>,
+        isSeries: Boolean = false,
     ): JellyxRatings
 }
