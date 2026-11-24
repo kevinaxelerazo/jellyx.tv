@@ -245,6 +245,7 @@ private fun MainNavigation(
         }
     val tabRoutes = navigationItems.map { it.route }
     val prefilledSearchQuery = remember { mutableStateOf<String?>(null) }
+    val searchOriginRoute = remember { mutableStateOf<NavKey?>(null) }
 
     val topLevelRoute = navigationState.topLevelRoute
     val atTabRoot = navigationState.currentBackStack().last() == topLevelRoute
@@ -256,6 +257,7 @@ private fun MainNavigation(
     LaunchedEffect(topLevelRoute) {
         if (topLevelRoute != MediaRoute) {
             searchExpanded.value = false
+            searchOriginRoute.value = null
         }
     }
 
@@ -291,11 +293,15 @@ private fun MainNavigation(
             context = context,
             showFloatingPlatformsBar = customNavSuiteType != NavigationSuiteType.NavigationRail,
             onSearchClick = {
+                if (topLevelRoute != MediaRoute) {
+                    searchOriginRoute.value = topLevelRoute
+                }
                 searchExpanded.value = true
                 navigator.navigate(MediaRoute)
             },
             searchExpanded = searchExpanded,
             prefilledSearchQuery = prefilledSearchQuery,
+            searchOriginRoute = searchOriginRoute,
             permissionViewModel = permissionViewModel,
             permissionApplicable = permissionApplicable,
         )
@@ -307,6 +313,7 @@ private fun MainNavigation(
                 item(
                     selected = topLevelRoute == item.route,
                     onClick = {
+                        searchOriginRoute.value = null
                         if (item.route == MediaRoute && topLevelRoute == MediaRoute) {
                             searchExpanded.value = true
                         }
@@ -328,6 +335,9 @@ private fun MainNavigation(
                     item(
                         selected = false,
                         onClick = {
+                            if (topLevelRoute != MediaRoute) {
+                                searchOriginRoute.value = topLevelRoute
+                            }
                             prefilledSearchQuery.value = platform.searchQuery
                             searchExpanded.value = true
                             navigator.navigate(MediaRoute)
@@ -493,6 +503,7 @@ private fun EntryProviderScope<NavKey>.mainEntries(
     onSearchClick: () -> Unit,
     searchExpanded: MutableState<Boolean>,
     prefilledSearchQuery: MutableState<String?>,
+    searchOriginRoute: MutableState<NavKey?>,
     permissionViewModel: PermissionViewModel,
     permissionApplicable: Boolean,
 ) {
@@ -525,6 +536,7 @@ private fun EntryProviderScope<NavKey>.mainEntries(
             onManageServers = dropUnlessResumed { navigator.navigate(ServersRoute) },
             onItemClick = resumedAction { item -> navigateToItem(navigator, item, context) },
             onPlatformClick = { query ->
+                searchOriginRoute.value = HomeRoute
                 prefilledSearchQuery.value = query
                 searchExpanded.value = true
                 navigator.navigate(MediaRoute)
@@ -537,7 +549,16 @@ private fun EntryProviderScope<NavKey>.mainEntries(
             onItemClick = resumedAction { item -> navigateToItem(navigator, item, context) },
             onFavoritesClick = dropUnlessResumed { navigator.navigate(FavoritesRoute) },
             searchExpanded = searchExpanded.value,
-            onSearchExpand = { searchExpanded.value = it },
+            onSearchExpand = { expanded ->
+                searchExpanded.value = expanded
+                if (!expanded) {
+                    val returnRoute = searchOriginRoute.value
+                    searchOriginRoute.value = null
+                    if (returnRoute != null && returnRoute != MediaRoute) {
+                        navigator.navigate(returnRoute)
+                    }
+                }
+            },
             prefilledSearchQuery = prefilledSearchQuery.value,
             onPrefilledSearchQueryConsumed = { prefilledSearchQuery.value = null },
         )
