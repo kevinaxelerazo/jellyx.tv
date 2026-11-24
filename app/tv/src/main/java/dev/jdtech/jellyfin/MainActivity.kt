@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -24,6 +25,8 @@ import dev.jdtech.jellyfin.core.presentation.components.JellyxStartupSplash
 import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.setup.domain.SetupRepository
 import dev.jdtech.jellyfin.update.AppUpdateManager
+import dev.jdtech.jellyfin.utils.TvIncomingCommand
+import dev.jdtech.jellyfin.utils.TvVoiceIntentParser
 import dev.jdtech.jellyfin.viewmodels.MainViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -36,9 +39,12 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var setupRepository: SetupRepository
     @Inject lateinit var appUpdateManager: AppUpdateManager
 
+    private data class PendingVoiceSearch(val query: String, val nonce: Long)
+
     private val viewModel: MainViewModel by viewModels()
     private val isSeedReady = mutableStateOf(false)
     private val pendingDeepLinkRoute = mutableStateOf<NavKey?>(null)
+    private val pendingVoiceSearch = mutableStateOf<PendingVoiceSearch?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,7 +68,18 @@ class MainActivity : ComponentActivity() {
             val availableUpdate by appUpdateManager.availableUpdate.collectAsStateWithLifecycle()
             val updateProgress by appUpdateManager.downloadProgress.collectAsStateWithLifecycle()
             val updateError by appUpdateManager.updateError.collectAsStateWithLifecycle()
-            var showStartupSplash by rememberSaveable { mutableStateOf(true) }
+            var showStartupSplash by rememberSaveable {
+                mutableStateOf(
+                    pendingVoiceSearch.value == null && pendingDeepLinkRoute.value == null
+                )
+            }
+
+            LaunchedEffect(pendingVoiceSearch.value, pendingDeepLinkRoute.value) {
+                if (pendingVoiceSearch.value != null || pendingDeepLinkRoute.value != null) {
+                    showStartupSplash = false
+                }
+            }
+
             val darkThemeOverride =
                 when (state.theme) {
                     "light" -> false
@@ -79,6 +96,9 @@ class MainActivity : ComponentActivity() {
                             hasCurrentUser = state.hasCurrentUser,
                             pendingDeepLinkRoute = pendingDeepLinkRoute.value,
                             onDeepLinkConsumed = { pendingDeepLinkRoute.value = null },
+                            pendingVoiceSearchQuery = pendingVoiceSearch.value?.query,
+                            pendingVoiceSearchNonce = pendingVoiceSearch.value?.nonce ?: 0L,
+                            onVoiceSearchConsumed = { pendingVoiceSearch.value = null },
                         )
                     }
                     if (!showStartupSplash && (state.isLoading || !isSeedReady.value)) {
@@ -122,17 +142,31 @@ class MainActivity : ComponentActivity() {
         handleIncomingIntent(intent)
     }
 
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (keyCode == android.view.KeyEvent.KEYCODE_SEARCH) {
+            pendingVoiceSearch.value = PendingVoiceSearch("", System.nanoTime())
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     private fun handleIncomingIntent(intent: Intent?) {
-        val data = intent?.data ?: return
-        if (data.scheme != "jellyx" || data.host != "item") return
-        val segments = data.pathSegments ?: return
-        val kind = segments.getOrNull(0) ?: return
-        val itemId = segments.getOrNull(1)?.takeIf { it.isNotBlank() } ?: return
-        pendingDeepLinkRoute.value =
-            when (kind) {
-                "movie" -> MovieRoute(itemId)
-                "show" -> ShowRoute(itemId)
-                else -> null
+        when (val cmd = TvVoiceIntentParser.parseIntent(intent)) {
+            is TvIncomingCommand.OpenItem -> {
+                pendingDeepLinkRoute.value =
+                    when (cmd.kind) {
+                        "movie" -> MovieRoute(cmd.itemId)
+                        "show" -> ShowRoute(cmd.itemId)
+                        else -> null
+                    }
             }
+            is TvIncomingCommand.VoiceSearch -> {
+                pendingVoiceSearch.value = PendingVoiceSearch(cmd.query, System.nanoTime())
+            }
+            TvIncomingCommand.OpenSearchScreen -> {
+                pendingVoiceSearch.value = PendingVoiceSearch("", System.nanoTime())
+            }
+            null -> Unit
+        }
     }
 }

@@ -43,6 +43,9 @@ fun NavigationRoot(
     hasCurrentUser: Boolean,
     pendingDeepLinkRoute: NavKey? = null,
     onDeepLinkConsumed: () -> Unit = {},
+    pendingVoiceSearchQuery: String? = null,
+    pendingVoiceSearchNonce: Long = 0L,
+    onVoiceSearchConsumed: () -> Unit = {},
 ) {
     val setupComplete = hasServers && hasCurrentServer && hasCurrentUser
 
@@ -90,6 +93,14 @@ fun NavigationRoot(
         }
     }
 
+    LaunchedEffect(setupComplete, pendingVoiceSearchNonce) {
+        if (setupComplete && pendingVoiceSearchNonce > 0L) {
+            if (backStack.lastOrNull() != MainRoute) {
+                navigateToMain()
+            }
+        }
+    }
+
     // The activity-scoped permission ViewModel is shared by the interstitial and the setup screen.
     val permissionViewModel: PermissionViewModel = hiltViewModel()
     val permissionState by permissionViewModel.state.collectAsStateWithLifecycle()
@@ -117,6 +128,9 @@ fun NavigationRoot(
                         goBack = goBack,
                         permissionViewModel = permissionViewModel,
                         permissionApplicable = permissionState.currentRequest != null,
+                        externalSearchQuery = pendingVoiceSearchQuery,
+                        externalSearchNonce = pendingVoiceSearchNonce,
+                        onExternalSearchConsumed = onVoiceSearchConsumed,
                     )
                 },
         )
@@ -137,6 +151,9 @@ private fun EntryProviderScope<NavKey>.tvEntries(
     goBack: () -> Unit,
     permissionViewModel: PermissionViewModel,
     permissionApplicable: Boolean,
+    externalSearchQuery: String? = null,
+    externalSearchNonce: Long = 0L,
+    onExternalSearchConsumed: () -> Unit = {},
 ) {
     entry<WelcomeRoute> {
         WelcomeScreen(
@@ -216,6 +233,9 @@ private fun EntryProviderScope<NavKey>.tvEntries(
                         PlayerRoute(itemId = itemId.toString(), itemKind = itemKind.serialName)
                     )
                 },
+            externalSearchQuery = externalSearchQuery,
+            externalSearchNonce = externalSearchNonce,
+            onExternalSearchConsumed = onExternalSearchConsumed,
         )
     }
     entry<LibraryRoute> { key ->

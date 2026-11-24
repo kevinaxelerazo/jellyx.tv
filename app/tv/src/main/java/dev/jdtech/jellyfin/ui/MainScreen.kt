@@ -1,7 +1,9 @@
 package dev.jdtech.jellyfin.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,6 +41,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
@@ -74,6 +78,9 @@ fun MainScreen(
     navigateToMovie: (itemId: UUID) -> Unit,
     navigateToShow: (itemId: UUID) -> Unit,
     navigateToPlayer: (itemId: UUID, itemKind: BaseItemKind) -> Unit,
+    externalSearchQuery: String? = null,
+    externalSearchNonce: Long = 0L,
+    onExternalSearchConsumed: () -> Unit = {},
     mainViewModel: MainViewModel = hiltViewModel(),
 ) {
     val delegatedUiState by mainViewModel.uiState.collectAsState()
@@ -87,6 +94,9 @@ fun MainScreen(
         navigateToMovie = navigateToMovie,
         navigateToShow = navigateToShow,
         navigateToPlayer = navigateToPlayer,
+        externalSearchQuery = externalSearchQuery,
+        externalSearchNonce = externalSearchNonce,
+        onExternalSearchConsumed = onExternalSearchConsumed,
     )
 }
 
@@ -106,12 +116,36 @@ private fun MainScreenLayout(
     navigateToMovie: (itemId: UUID) -> Unit,
     navigateToShow: (itemId: UUID) -> Unit,
     navigateToPlayer: (itemId: UUID, itemKind: BaseItemKind) -> Unit,
+    externalSearchQuery: String? = null,
+    externalSearchNonce: Long = 0L,
+    onExternalSearchConsumed: () -> Unit = {},
 ) {
     var focusedTabIndex by rememberSaveable { mutableIntStateOf(1) }
     var activeTabIndex by rememberSaveable { mutableIntStateOf(focusedTabIndex) }
+    var tabBeforeSearch by rememberSaveable { mutableIntStateOf(1) }
 
     var isLoading by remember { mutableStateOf(false) }
     var prefilledSearchQuery by rememberSaveable { mutableStateOf<String?>(null) }
+    var prefilledSearchIsPlatform by rememberSaveable { mutableStateOf(true) }
+    var prefilledSearchNonce by rememberSaveable { mutableLongStateOf(0L) }
+
+    LaunchedEffect(externalSearchNonce) {
+        if (externalSearchNonce > 0L) {
+            tabBeforeSearch = 1
+            prefilledSearchQuery = externalSearchQuery.orEmpty()
+            prefilledSearchIsPlatform = false
+            prefilledSearchNonce = externalSearchNonce
+            focusedTabIndex = 0
+            activeTabIndex = 0
+            onExternalSearchConsumed()
+        }
+    }
+
+    BackHandler(enabled = activeTabIndex == 0) {
+        val returnTab = if (tabBeforeSearch == 0) 1 else tabBeforeSearch
+        focusedTabIndex = returnTab
+        activeTabIndex = returnTab
+    }
 
     var user: User? = null
     when (uiState) {
@@ -140,7 +174,12 @@ private fun MainScreenLayout(
                     // FocusedTab's indicator
                     PillBorderIndicator(
                         currentTabPosition = tabPositions[focusedTabIndex],
-                        activeBorderColor = MaterialTheme.colorScheme.primary,
+                        activeBorderColor =
+                            if (focusedTabIndex == activeTabIndex) {
+                                MaterialTheme.colorScheme.onBackground
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
                         inactiveBorderColor = Color.Transparent,
                         doesTabRowHaveFocus = isActivated,
                     )
@@ -169,6 +208,9 @@ private fun MainScreenLayout(
                                 focusedSelectedContentColor = MaterialTheme.colorScheme.onPrimary,
                             ),
                         onClick = {
+                            if (index == 0 && activeTabIndex != 0) {
+                                tabBeforeSearch = activeTabIndex
+                            }
                             focusedTabIndex = index
                             activeTabIndex = index
                         },
@@ -210,13 +252,26 @@ private fun MainScreenLayout(
                 items(DEFAULT_STREAMING_PLATFORM_SHORTCUTS, key = { it.id }) { platform ->
                     Button(
                         onClick = {
+                            tabBeforeSearch = if (activeTabIndex != 0) activeTabIndex else 1
                             prefilledSearchQuery = platform.searchQuery
+                            prefilledSearchIsPlatform = true
+                            prefilledSearchNonce = System.nanoTime()
                             focusedTabIndex = 0
                             activeTabIndex = 0
                         },
                         colors =
                             ButtonDefaults.colors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                focusedContainerColor = MaterialTheme.colorScheme.primary,
+                                focusedContentColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
+                        border =
+                            ButtonDefaults.border(
+                                focusedBorder =
+                                    Border(
+                                        BorderStroke(3.dp, MaterialTheme.colorScheme.onBackground)
+                                    )
                             ),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -252,7 +307,12 @@ private fun MainScreenLayout(
                     navigateToShow = navigateToShow,
                     isLoading = { isLoading = it },
                     prefilledQuery = prefilledSearchQuery,
-                    onPrefilledQueryConsumed = { prefilledSearchQuery = null },
+                    prefilledIsPlatform = prefilledSearchIsPlatform,
+                    prefilledQueryNonce = prefilledSearchNonce,
+                    onPrefilledQueryConsumed = {
+                        prefilledSearchQuery = null
+                        prefilledSearchNonce = 0L
+                    },
                 )
             }
             1 -> {

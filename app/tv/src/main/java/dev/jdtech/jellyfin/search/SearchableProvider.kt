@@ -16,6 +16,7 @@ import dev.jdtech.jellyfin.models.JellyxEpisode
 import dev.jdtech.jellyfin.models.JellyxMovie
 import dev.jdtech.jellyfin.models.JellyxShow
 import dev.jdtech.jellyfin.repository.JellyfinRepository
+import dev.jdtech.jellyfin.utils.TvVoiceIntentParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import timber.log.Timber
@@ -42,7 +43,7 @@ class SearchableProvider : ContentProvider() {
             selectionArgs?.firstOrNull()?.takeIf { it.isNotBlank() }
                 ?: uri.lastPathSegment
                     ?.takeIf { it != SearchManager.SUGGEST_URI_PATH_QUERY }
-        val searchQuery = rawQuery?.trim().orEmpty()
+        val searchQuery = rawQuery?.let(TvVoiceIntentParser::cleanVoiceQuery).orEmpty()
         if (searchQuery.length < 2) {
             return cursor
         }
@@ -66,7 +67,7 @@ class SearchableProvider : ContentProvider() {
                     .getOrDefault(emptyList())
             }
 
-        items.forEachIndexed { index, item ->
+        items.take(20).forEachIndexed { index, item ->
             val routeTarget =
                 when (item) {
                     is JellyxMovie -> "movie" to item.id.toString()
@@ -78,6 +79,13 @@ class SearchableProvider : ContentProvider() {
             val (kind, targetId) = routeTarget
             val subtitle = item.overview.takeIf { it.isNotBlank() } ?: ""
             val posterUri = item.images.primary?.toString()
+            val productionYear: Int? =
+                when (item) {
+                    is JellyxMovie -> item.productionYear
+                    is JellyxShow -> item.productionYear
+                    else -> null
+                }
+            val durationMs: Long? = (item.runtimeTicks / 10_000L).takeIf { it > 0L }
 
             cursor.addRow(
                 arrayOf<Any?>(
@@ -88,6 +96,8 @@ class SearchableProvider : ContentProvider() {
                     "video/mp4",
                     Intent.ACTION_VIEW,
                     "jellyx://item/$kind/$targetId",
+                    productionYear,
+                    durationMs,
                 ),
             )
         }
@@ -118,6 +128,8 @@ class SearchableProvider : ContentProvider() {
                 SearchManager.SUGGEST_COLUMN_CONTENT_TYPE,
                 SearchManager.SUGGEST_COLUMN_INTENT_ACTION,
                 SearchManager.SUGGEST_COLUMN_INTENT_DATA,
+                SearchManager.SUGGEST_COLUMN_PRODUCTION_YEAR,
+                SearchManager.SUGGEST_COLUMN_DURATION,
             )
     }
 }

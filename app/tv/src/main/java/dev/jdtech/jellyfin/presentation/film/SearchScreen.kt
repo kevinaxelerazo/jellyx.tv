@@ -6,6 +6,7 @@ import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
@@ -62,9 +64,11 @@ import dev.jdtech.jellyfin.film.presentation.search.SearchAction
 import dev.jdtech.jellyfin.film.presentation.search.SearchViewModel
 import dev.jdtech.jellyfin.models.JellyxMovie
 import dev.jdtech.jellyfin.models.JellyxShow
+import dev.jdtech.jellyfin.models.toNativeRatings
 import dev.jdtech.jellyfin.presentation.theme.spacings
 import dev.jdtech.jellyfin.ui.components.Direction
 import dev.jdtech.jellyfin.ui.components.ItemCard
+import dev.jdtech.jellyfin.utils.TvVoiceIntentParser
 import java.util.UUID
 import kotlinx.coroutines.delay
 
@@ -74,6 +78,8 @@ fun SearchScreen(
     navigateToShow: (itemId: UUID) -> Unit,
     isLoading: (Boolean) -> Unit,
     prefilledQuery: String? = null,
+    prefilledIsPlatform: Boolean = true,
+    prefilledQueryNonce: Long = 0L,
     onPrefilledQueryConsumed: () -> Unit = {},
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
@@ -95,7 +101,7 @@ fun SearchScreen(
                     result.data
                         ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
                         ?.firstOrNull()
-                        ?.trim()
+                        ?.let(TvVoiceIntentParser::cleanVoiceQuery)
                 if (!spokenQuery.isNullOrBlank()) {
                     isPlatformFilterLocked = false
                     query = spokenQuery
@@ -104,11 +110,33 @@ fun SearchScreen(
             }
         }
 
-    LaunchedEffect(prefilledQuery) {
-        if (!prefilledQuery.isNullOrBlank()) {
-            query = prefilledQuery
-            isPlatformFilterLocked = true
-            focusResultsOnLoad = true
+    LaunchedEffect(prefilledQuery, prefilledQueryNonce) {
+        if (prefilledQueryNonce > 0L || !prefilledQuery.isNullOrBlank()) {
+            val trimmed = prefilledQuery?.trim().orEmpty()
+            val matchedPlatform =
+                if (trimmed.isNotBlank()) {
+                    DEFAULT_STREAMING_PLATFORM_SHORTCUTS.firstOrNull {
+                        it.searchQuery.equals(trimmed, ignoreCase = true) ||
+                            it.id.equals(trimmed, ignoreCase = true)
+                    }
+                } else {
+                    null
+                }
+            if (prefilledIsPlatform && matchedPlatform != null) {
+                query = matchedPlatform.searchQuery
+                isPlatformFilterLocked = true
+                focusResultsOnLoad = true
+            } else {
+                val cleaned = TvVoiceIntentParser.cleanVoiceQuery(prefilledQuery.orEmpty())
+                isPlatformFilterLocked = false
+                query = cleaned
+                if (cleaned.isNotBlank()) {
+                    focusResultsOnLoad = true
+                    viewModel.onAction(SearchAction.Search(cleaned))
+                } else {
+                    runCatching { searchFieldFocusRequester.requestFocus() }
+                }
+            }
             onPrefilledQueryConsumed()
         }
     }
@@ -121,10 +149,20 @@ fun SearchScreen(
     }
 
     LaunchedEffect(query) {
-        if (query.isNotBlank()) {
-            delay(minOf(50L + (query.length * 50L), 300L))
+        val trimmed = query.trim()
+        val matchedPlatform =
+            DEFAULT_STREAMING_PLATFORM_SHORTCUTS.firstOrNull {
+                it.searchQuery.equals(trimmed, ignoreCase = true) ||
+                    it.id.equals(trimmed, ignoreCase = true)
+            }
+        if (matchedPlatform != null) {
+            viewModel.onAction(SearchAction.SelectPlatform(matchedPlatform.id))
+        } else {
+            if (query.isNotBlank()) {
+                delay(minOf(50L + (query.length * 50L), 300L))
+            }
+            viewModel.onAction(SearchAction.Search(query))
         }
-        viewModel.onAction(SearchAction.Search(query))
     }
 
     Column(
@@ -214,6 +252,18 @@ fun SearchScreen(
                         ).show()
                     }
                 },
+                colors =
+                    ButtonDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        focusedContainerColor = MaterialTheme.colorScheme.primary,
+                        focusedContentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+                border =
+                    ButtonDefaults.border(
+                        focusedBorder =
+                            Border(BorderStroke(3.dp, MaterialTheme.colorScheme.onBackground))
+                    ),
             ) {
                 Icon(
                     painter = painterResource(CoreR.drawable.ic_mic),
@@ -245,7 +295,17 @@ fun SearchScreen(
                         },
                         colors =
                             ButtonDefaults.colors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                focusedContainerColor = MaterialTheme.colorScheme.primary,
+                                focusedContentColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
+                        border =
+                            ButtonDefaults.border(
+                                focusedBorder =
+                                    Border(
+                                        BorderStroke(3.dp, MaterialTheme.colorScheme.onBackground)
+                                    )
                             ),
                     ) {
                         Icon(
@@ -259,20 +319,39 @@ fun SearchScreen(
                 }
             }
             items(DEFAULT_STREAMING_PLATFORM_SHORTCUTS, key = { it.id }) { platform ->
+                val isSelected =
+                    state.activePlatformId == platform.id ||
+                        query.equals(platform.searchQuery, ignoreCase = true)
                 Button(
                     onClick = {
-                        query = platform.searchQuery
+                        if (query.equals(platform.searchQuery, ignoreCase = true)) {
+                            viewModel.onAction(SearchAction.SelectPlatform(platform.id))
+                        } else {
+                            query = platform.searchQuery
+                        }
                         isPlatformFilterLocked = true
                         focusResultsOnLoad = true
                     },
                     colors =
-                        ButtonDefaults.colors(
-                            containerColor =
-                                if (query.equals(platform.searchQuery, ignoreCase = true)) {
-                                    Color(platform.brandColorHex)
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                }
+                        if (isSelected) {
+                            ButtonDefaults.colors(
+                                containerColor = Color(platform.brandColorHex),
+                                contentColor = Color.White,
+                                focusedContainerColor = Color(platform.brandColorHex),
+                                focusedContentColor = Color.White,
+                            )
+                        } else {
+                            ButtonDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                focusedContainerColor = MaterialTheme.colorScheme.primary,
+                                focusedContentColor = MaterialTheme.colorScheme.onPrimary,
+                            )
+                        },
+                    border =
+                        ButtonDefaults.border(
+                            focusedBorder =
+                                Border(BorderStroke(3.dp, MaterialTheme.colorScheme.onBackground))
                         ),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -298,6 +377,16 @@ fun SearchScreen(
             }
         }
 
+        val activePlatform =
+            DEFAULT_STREAMING_PLATFORM_SHORTCUTS.firstOrNull { it.id == state.activePlatformId }
+        if (activePlatform != null && !state.loading) {
+            Text(
+                text = "${activePlatform.label} · ${state.items.size} títulos",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+            )
+        }
+
         if (query.isNotBlank() && !state.loading && state.items.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -317,6 +406,8 @@ fun SearchScreen(
                     ItemCard(
                         item = item,
                         direction = Direction.VERTICAL,
+                        ratings = state.ratingsByItemId[item.id] ?: item.toNativeRatings(),
+                        showRatingsOverlay = true,
                         onClick = {
                             when (item) {
                                 is JellyxMovie -> navigateToMovie(item.id)

@@ -25,6 +25,9 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.Jellyx">
+        <meta-data
+            android:name="android.app.default_searchable"
+            android:value=".MainActivity" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -36,6 +39,15 @@
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.google.android.gms.actions.SEARCH_ACTION" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -43,6 +55,9 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:host="item"
+                    android:scheme="jellyx" />
+                <data
+                    android:host="search"
                     android:scheme="jellyx" />
             </intent-filter>
             <meta-data
