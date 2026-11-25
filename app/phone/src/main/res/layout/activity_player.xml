@@ -12,7 +12,7 @@
         android:layout_height="match_parent"
         android:background="@android:color/black"
         app:animation_enabled="false"
-        app:show_buffering="always" />
+        app:show_buffering="never" />
 
     <TextView
         android:id="@+id/playback_stats_overlay"

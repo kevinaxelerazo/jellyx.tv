@@ -83,6 +83,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.C
+import androidx.media3.common.Player
 import androidx.media3.ui.DefaultTimeBar
 import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.PlayerView
@@ -135,6 +136,13 @@ class PlayerActivity : BasePlayerActivity() {
     private val showLiveChannelDrawerState = mutableStateOf(false)
     private val showEpisodesDrawerState = mutableStateOf(false)
     private val isInPipState = mutableStateOf(false)
+    private val isBufferingState = mutableStateOf(true)
+    private val bufferingListener =
+        object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                isBufferingState.value = playbackState == Player.STATE_BUFFERING
+            }
+        }
 
     private lateinit var skipSegmentButton: Button
 
@@ -217,6 +225,10 @@ class PlayerActivity : BasePlayerActivity() {
                         val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
 
                         Box(modifier = Modifier.fillMaxSize()) {
+                            if (isBufferingState.value && !state.playbackEnded && !inPip) {
+                                JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center))
+                            }
+
                             // 2. Left Edge Handle
                             AnimatedVisibility(
                                 visible =
@@ -410,6 +422,10 @@ class PlayerActivity : BasePlayerActivity() {
         )
 
         binding.playerView.player = viewModel.player
+        viewModel.player.addListener(bufferingListener)
+        isBufferingState.value =
+            viewModel.player.playbackState == Player.STATE_BUFFERING ||
+                !viewModel.uiState.value.fileLoaded
         binding.playerView.subtitleView?.apply {
             setApplyEmbeddedStyles(false)
             setApplyEmbeddedFontSizes(false)
@@ -710,7 +726,11 @@ class PlayerActivity : BasePlayerActivity() {
                         when (event) {
                             is PlayerEvents.NavigateBack -> finishPlayback()
                             is PlayerEvents.PlayerSwitched -> {
+                                binding.playerView.player?.removeListener(bufferingListener)
                                 binding.playerView.player = event.newPlayer
+                                event.newPlayer.addListener(bufferingListener)
+                                isBufferingState.value =
+                                    event.newPlayer.playbackState == Player.STATE_BUFFERING
                             }
                             is PlayerEvents.IsPlayingChanged -> {
                                 if (event.isPlaying) {
@@ -878,6 +898,13 @@ class PlayerActivity : BasePlayerActivity() {
         ) {
             pictureInPicture()
         }
+    }
+
+    override fun onDestroy() {
+        if (::binding.isInitialized) {
+            binding.playerView.player?.removeListener(bufferingListener)
+        }
+        super.onDestroy()
     }
 
     private fun finishPlayback() {
