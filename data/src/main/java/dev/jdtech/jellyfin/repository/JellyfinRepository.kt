@@ -1,6 +1,7 @@
 package dev.jdtech.jellyfin.repository
 
 import androidx.paging.PagingData
+import dev.jdtech.jellyfin.models.CollectionType
 import dev.jdtech.jellyfin.models.JellyxChannel
 import dev.jdtech.jellyfin.models.JellyxCollection
 import dev.jdtech.jellyfin.models.JellyxEpisode
@@ -81,6 +82,12 @@ interface JellyfinRepository {
     suspend fun getResumeItems(): List<JellyxItem>
 
     suspend fun getLatestMedia(parentId: UUID): List<JellyxItem>
+
+    suspend fun getLatestReleases(
+        parentId: UUID,
+        collectionType: CollectionType,
+        limit: Int = 16,
+    ): List<JellyxItem> = getLatestMedia(parentId)
 
     suspend fun getSeasons(seriesId: UUID, offline: Boolean = false): List<JellyxSeason>
 

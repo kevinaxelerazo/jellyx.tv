@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.paging.PagingData
 import dev.jdtech.jellyfin.api.JellyfinApi
 import dev.jdtech.jellyfin.database.ServerDatabaseDao
+import dev.jdtech.jellyfin.models.CollectionType
 import dev.jdtech.jellyfin.models.JellyxChannel
 import dev.jdtech.jellyfin.models.JellyxCollection
 import dev.jdtech.jellyfin.models.JellyxEpisode
@@ -195,6 +196,12 @@ class JellyfinRepositoryOfflineImpl(
     override suspend fun getLatestMedia(parentId: UUID): List<JellyxItem> {
         return emptyList()
     }
+
+    override suspend fun getLatestReleases(
+        parentId: UUID,
+        collectionType: CollectionType,
+        limit: Int,
+    ): List<JellyxItem> = getLatestMedia(parentId)
 
     override suspend fun getSeasons(seriesId: UUID, offline: Boolean): List<JellyxSeason> =
         withContext(Dispatchers.IO) {

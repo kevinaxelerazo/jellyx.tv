@@ -227,14 +227,12 @@ constructor(
                         CollectionType.supported
                 }
                 .map { view ->
+                    val collectionType = CollectionType.fromString(view.collectionType?.serialName)
                     val latest =
-                        if (
-                            CollectionType.fromString(view.collectionType?.serialName) ==
-                                CollectionType.LiveTv
-                        ) {
+                        if (collectionType == CollectionType.LiveTv) {
                             repository.getLiveTvChannels().take(16)
                         } else {
-                            repository.getLatestMedia(view.id)
+                            repository.getLatestReleases(view.id, collectionType)
                         }
                     view to latest
                 }

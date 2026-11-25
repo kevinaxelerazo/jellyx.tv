@@ -7,6 +7,7 @@ import androidx.paging.PagingData
 import dev.jdtech.jellyfin.api.JellyfinApi
 import dev.jdtech.jellyfin.cache.MediaCacheEvictionBus
 import dev.jdtech.jellyfin.database.ServerDatabaseDao
+import dev.jdtech.jellyfin.models.CollectionType
 import dev.jdtech.jellyfin.models.JellyxChannel
 import dev.jdtech.jellyfin.models.JellyxCollection
 import dev.jdtech.jellyfin.models.JellyxEpisode
@@ -18,6 +19,8 @@ import dev.jdtech.jellyfin.models.JellyxSeason
 import dev.jdtech.jellyfin.models.JellyxSegment
 import dev.jdtech.jellyfin.models.JellyxShow
 import dev.jdtech.jellyfin.models.JellyxSource
+import dev.jdtech.jellyfin.models.LatestReleasesRanker
+import dev.jdtech.jellyfin.models.ReleaseCandidate
 import dev.jdtech.jellyfin.models.SortBy
 import dev.jdtech.jellyfin.models.SortOrder
 import dev.jdtech.jellyfin.models.StreamingPlatformCatalog
@@ -608,6 +611,156 @@ class JellyfinRepositoryImpl(
                 .content
                 .mapNotNull { it.toJellyxItem(this@JellyfinRepositoryImpl, database) }
         }
+
+    override suspend fun getLatestReleases(
+        parentId: UUID,
+        collectionType: CollectionType,
+        limit: Int,
+    ): List<JellyxItem> =
+        withContext(Dispatchers.IO) {
+            val userId = jellyfinApi.userId!!
+            val now = LocalDateTime.now()
+
+            when (collectionType) {
+                CollectionType.Movies -> {
+                    val dtos =
+                        jellyfinApi.libraryApi
+                            .getItems(
+                                userId = userId,
+                                parentId = parentId,
+                                includeItemTypes = listOf(BaseItemKind.MOVIE),
+                                recursive = true,
+                                sortBy =
+                                    listOf(
+                                        ItemSortBy.PREMIERE_DATE,
+                                        ItemSortBy.PRODUCTION_YEAR,
+                                        ItemSortBy.DATE_CREATED,
+                                    ),
+                                sortOrder = listOf(ItemSortOrder.DESCENDING),
+                                maxPremiereDate = now.plusDays(14),
+                                limit = (limit * 2).coerceAtLeast(32),
+                                fields = listOf(ItemFields.PROVIDER_IDS),
+                            )
+                            .content
+                            .items
+                    val candidates = dtos.toReleaseCandidates()
+                    LatestReleasesRanker.rankMovies(candidates, now = now, limit = limit)
+                        .ifEmpty { getLatestMedia(parentId) }
+                }
+                CollectionType.TvShows -> {
+                    val ranked = coroutineScope {
+                        val seriesDeferred = async {
+                            jellyfinApi.libraryApi
+                                .getItems(
+                                    userId = userId,
+                                    parentId = parentId,
+                                    includeItemTypes = listOf(BaseItemKind.SERIES),
+                                    recursive = true,
+                                    sortBy =
+                                        listOf(
+                                            ItemSortBy.PREMIERE_DATE,
+                                            ItemSortBy.PRODUCTION_YEAR,
+                                            ItemSortBy.DATE_CREATED,
+                                        ),
+                                    sortOrder = listOf(ItemSortOrder.DESCENDING),
+                                    maxPremiereDate = now.plusDays(7),
+                                    limit = (limit * 2).coerceAtLeast(32),
+                                    fields = listOf(ItemFields.PROVIDER_IDS),
+                                )
+                                .content
+                                .items
+                        }
+                        val episodesDeferred = async {
+                            runCatching {
+                                    jellyfinApi.libraryApi
+                                        .getItems(
+                                            userId = userId,
+                                            parentId = parentId,
+                                            includeItemTypes = listOf(BaseItemKind.EPISODE),
+                                            recursive = true,
+                                            sortBy =
+                                                listOf(
+                                                    ItemSortBy.PREMIERE_DATE,
+                                                    ItemSortBy.DATE_CREATED,
+                                                ),
+                                            sortOrder = listOf(ItemSortOrder.DESCENDING),
+                                            maxPremiereDate = now.plusDays(7),
+                                            limit = 60,
+                                        )
+                                        .content
+                                        .items
+                                }
+                                .getOrDefault(emptyList())
+                        }
+
+                        val seriesDtos = seriesDeferred.await()
+                        val episodeDtos = episodesDeferred.await()
+
+                        val latestEpisodeDateBySeriesId =
+                            buildMap<UUID, LocalDateTime> {
+                                for (ep in episodeDtos) {
+                                    val seriesId = ep.seriesId ?: continue
+                                    val premiereDate = ep.premiereDate ?: continue
+                                    val existing = this[seriesId]
+                                    if (existing == null || premiereDate.isAfter(existing)) {
+                                        put(seriesId, premiereDate)
+                                    }
+                                }
+                            }
+
+                        val existingSeriesIds = seriesDtos.mapTo(HashSet()) { it.id }
+                        val missingSeriesIds =
+                            latestEpisodeDateBySeriesId.entries
+                                .sortedByDescending { it.value }
+                                .map { it.key }
+                                .filter { it !in existingSeriesIds }
+                                .take(limit)
+
+                        val extraSeriesDtos =
+                            if (missingSeriesIds.isNotEmpty()) {
+                                runCatching {
+                                        jellyfinApi.libraryApi
+                                            .getItems(
+                                                userId = userId,
+                                                ids = missingSeriesIds,
+                                                includeItemTypes = listOf(BaseItemKind.SERIES),
+                                                fields = listOf(ItemFields.PROVIDER_IDS),
+                                            )
+                                            .content
+                                            .items
+                                    }
+                                    .getOrDefault(emptyList())
+                            } else {
+                                emptyList()
+                            }
+
+                        val mergedSeriesDtos = (seriesDtos + extraSeriesDtos).distinctBy { it.id }
+                        val candidates = mergedSeriesDtos.toReleaseCandidates()
+                        LatestReleasesRanker.rankSeries(
+                            candidates,
+                            latestEpisodeDateBySeriesId,
+                            now = now,
+                            limit = limit,
+                        )
+                    }
+                    ranked.ifEmpty { getLatestMedia(parentId) }
+                }
+                else -> getLatestMedia(parentId)
+            }
+        }
+
+    private suspend fun List<BaseItemDto>.toReleaseCandidates():
+        List<ReleaseCandidate<JellyxItem>> = mapNotNull { dto ->
+        val item = dto.toJellyxItem(this@JellyfinRepositoryImpl, database) ?: return@mapNotNull null
+        ReleaseCandidate(
+            id = dto.id,
+            item = item,
+            premiereDate = dto.premiereDate,
+            productionYear = dto.productionYear,
+            communityRating = dto.communityRating,
+            name = dto.name.orEmpty(),
+        )
+    }
 
     override suspend fun getSeasons(seriesId: UUID, offline: Boolean): List<JellyxSeason> =
         withContext(Dispatchers.IO) {
