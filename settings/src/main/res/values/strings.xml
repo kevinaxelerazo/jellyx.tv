@@ -118,4 +118,8 @@
     <string name="advanced">Advanced</string>
     <string name="discard_changes_dialog_title">Discard changes?</string>
     <string name="discard_changes_dialog_text">You have unsaved changes.</string>
+    <string name="pref_player_smart_mpv_live_tv">Use libmpv for Live TV</string>
+    <string name="pref_player_smart_mpv_live_tv_summary">Start Live TV channels directly with libmpv for faster zapping and HLS/IPTV stability.</string>
+    <string name="pref_player_smart_mpv_ass_subs">Use libmpv for ASS/SSA subtitles</string>
+    <string name="pref_player_smart_mpv_ass_subs_summary">Start videos with ASS/SSA subtitles (e.g. anime) directly with libmpv. Videos with SRT/VTT or burned-in subtitles keep ExoPlayer.</string>
 </resources>

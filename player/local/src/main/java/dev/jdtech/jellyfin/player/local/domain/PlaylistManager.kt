@@ -325,14 +325,15 @@ internal constructor(
                         mediaStream.title,
                         mediaStream.language,
                         mediaStream.path!!.toUri(),
-                        when (mediaStream.codec) {
+                        when (mediaStream.codec.lowercase()) {
                             "subrip" -> MimeTypes.APPLICATION_SUBRIP
                             "webvtt" -> MimeTypes.TEXT_VTT
-                            "ass" -> MimeTypes.TEXT_SSA
+                            "ass", "ssa" -> MimeTypes.TEXT_SSA
                             else -> MimeTypes.TEXT_UNKNOWN
                         },
                     )
                 }
+        val hasAssSubtitles = PlayerEngineSelector.hasAssOrSsaSubtitles(mediaSource.mediaStreams)
         val trickplayInfo =
             when (this) {
                 is JellyxSources -> {
@@ -370,6 +371,7 @@ internal constructor(
             audioStreamBitrate = audioStream?.bitRate,
             totalSourcesCount = mediaSources.size,
             liveStreamId = mediaSource.liveStreamId,
+            hasAssSubtitles = hasAssSubtitles,
         )
     }
 

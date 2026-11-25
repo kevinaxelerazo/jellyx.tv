@@ -290,6 +290,24 @@ class SettingsViewModel @Inject constructor(private val appPreferences: AppPrefe
                                                     options = R.array.player_backends,
                                                     optionValues = R.array.player_backends,
                                                 ),
+                                                PreferenceSwitch(
+                                                    nameStringResource =
+                                                        R.string.pref_player_smart_mpv_live_tv,
+                                                    descriptionStringRes =
+                                                        R.string
+                                                            .pref_player_smart_mpv_live_tv_summary,
+                                                    backendPreference =
+                                                        appPreferences.playerSmartMpvLiveTv,
+                                                ),
+                                                PreferenceSwitch(
+                                                    nameStringResource =
+                                                        R.string.pref_player_smart_mpv_ass_subs,
+                                                    descriptionStringRes =
+                                                        R.string
+                                                            .pref_player_smart_mpv_ass_subs_summary,
+                                                    backendPreference =
+                                                        appPreferences.playerSmartMpvAssSubs,
+                                                ),
                                                 PreferenceCategory(
                                                     nameStringResource = R.string.mpv_options,
                                                     onClick = {

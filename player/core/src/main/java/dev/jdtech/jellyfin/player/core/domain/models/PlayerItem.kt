@@ -25,4 +25,5 @@ data class PlayerItem(
     val audioStreamBitrate: Int? = null,
     val totalSourcesCount: Int = 1,
     val liveStreamId: String? = null,
+    val hasAssSubtitles: Boolean = false,
 ) : Parcelable

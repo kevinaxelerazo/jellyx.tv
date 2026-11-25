@@ -4,6 +4,7 @@ import android.net.Uri
 import dev.jdtech.jellyfin.models.JellyxChannel
 import dev.jdtech.jellyfin.models.JellyxEpisode
 import dev.jdtech.jellyfin.models.JellyxImages
+import dev.jdtech.jellyfin.models.JellyxMediaStream
 import dev.jdtech.jellyfin.models.JellyxSource
 import dev.jdtech.jellyfin.models.JellyxSourceType
 import dev.jdtech.jellyfin.repository.JellyfinRepository
@@ -16,8 +17,10 @@ import io.mockk.unmockkStatic
 import java.util.UUID
 import kotlinx.coroutines.test.runTest
 import org.jellyfin.sdk.model.api.BaseItemKind
+import org.jellyfin.sdk.model.api.MediaStreamType
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -188,6 +191,95 @@ class PlaylistManagerTest {
             assertNotNull(refreshed)
             assertEquals(ep4.id, refreshed?.itemId)
             assertEquals(12_500L, refreshed?.playbackPosition)
+        }
+
+    private fun buildSubtitleStream(codec: String, isExternal: Boolean = false, path: String? = null): JellyxMediaStream {
+        return JellyxMediaStream(
+            title = "Sub",
+            displayTitle = null,
+            language = "spa",
+            type = MediaStreamType.SUBTITLE,
+            codec = codec,
+            isExternal = isExternal,
+            path = path,
+            channelLayout = null,
+            videoRangeType = null,
+            height = null,
+            width = null,
+            videoDoViTitle = null,
+        )
+    }
+
+    @Test
+    fun `toPlayerItem sets hasAssSubtitles true for ASS or SSA streams and false for SRT-only or subtitle-less sources`() =
+        runTest {
+            val seriesId = UUID.randomUUID()
+            val seasonId = UUID.randomUUID()
+            val epAss = buildEpisode(UUID.randomUUID(), 1, seriesId, seasonId)
+            val epSsaExt = buildEpisode(UUID.randomUUID(), 2, seriesId, seasonId)
+            val epSrt = buildEpisode(UUID.randomUUID(), 3, seriesId, seasonId)
+            val epNoSubs = buildEpisode(UUID.randomUUID(), 4, seriesId, seasonId)
+
+            val assSource =
+                buildLiveSource(epAss.id).copy(
+                    path = "https://jellyx.test/ep1.mkv",
+                    mediaStreams = listOf(buildSubtitleStream("ass")),
+                )
+            val ssaExtSource =
+                buildLiveSource(epSsaExt.id).copy(
+                    path = "https://jellyx.test/ep2.mkv",
+                    mediaStreams = listOf(
+                        buildSubtitleStream(
+                            codec = "ssa",
+                            isExternal = true,
+                            path = "https://jellyx.test/ep2.ssa?api_key=123",
+                        )
+                    ),
+                )
+            val srtSource =
+                buildLiveSource(epSrt.id).copy(
+                    path = "https://jellyx.test/ep3.mkv",
+                    mediaStreams = listOf(
+                        buildSubtitleStream(
+                            codec = "subrip",
+                            isExternal = true,
+                            path = "https://jellyx.test/ep3.srt",
+                        )
+                    ),
+                )
+            val noSubsSource =
+                buildLiveSource(epNoSubs.id).copy(
+                    path = "https://jellyx.test/ep4.mkv",
+                    mediaStreams = emptyList(),
+                )
+
+            coEvery { repository.getEpisode(epAss.id) } returns epAss
+            coEvery { repository.getEpisode(epSsaExt.id) } returns epSsaExt
+            coEvery { repository.getEpisode(epSrt.id) } returns epSrt
+            coEvery { repository.getEpisode(epNoSubs.id) } returns epNoSubs
+            coEvery { repository.getEpisodes(seriesId = seriesId, seasonId = seasonId, fields = any()) } returns
+                listOf(epAss, epSsaExt, epSrt, epNoSubs)
+
+            coEvery { repository.getMediaSources(epAss.id, true) } returns listOf(assSource)
+            coEvery { smartSourceSelector.selectSource(listOf(assSource), any()) } returns assSource
+            coEvery { repository.getMediaSources(epSsaExt.id, true) } returns listOf(ssaExtSource)
+            coEvery { smartSourceSelector.selectSource(listOf(ssaExtSource), any()) } returns ssaExtSource
+            coEvery { repository.getMediaSources(epSrt.id, true) } returns listOf(srtSource)
+            coEvery { smartSourceSelector.selectSource(listOf(srtSource), any()) } returns srtSource
+            coEvery { repository.getMediaSources(epNoSubs.id, true) } returns listOf(noSubsSource)
+            coEvery { smartSourceSelector.selectSource(listOf(noSubsSource), any()) } returns noSubsSource
+
+            val assItem = playlistManager.getInitialItem(epAss.id, BaseItemKind.EPISODE)
+            assertTrue(assItem?.hasAssSubtitles == true)
+
+            val ssaItem = playlistManager.getInitialItem(epSsaExt.id, BaseItemKind.EPISODE)
+            assertTrue(ssaItem?.hasAssSubtitles == true)
+
+            val srtItem = playlistManager.getInitialItem(epSrt.id, BaseItemKind.EPISODE)
+            assertFalse(srtItem?.hasAssSubtitles == true)
+
+            val noSubsItem = playlistManager.getInitialItem(epNoSubs.id, BaseItemKind.EPISODE)
+            assertFalse(noSubsItem?.hasAssSubtitles == true)
         }
 }
 

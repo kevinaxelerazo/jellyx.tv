@@ -35,6 +35,8 @@ class AppPreferences @Inject constructor(val sharedPreferences: SharedPreference
     val playerMpvHwdec = Preference("pref_player_mpv_hwdec", "mediacodec")
     val playerMpvVo = Preference("pref_player_mpv_vo", "gpu")
     val playerMpvAo = Preference("pref_player_mpv_ao", "aaudio")
+    val playerSmartMpvLiveTv = Preference("pref_player_smart_mpv_live_tv", true)
+    val playerSmartMpvAssSubs = Preference("pref_player_smart_mpv_ass_subs", true)
 
     // Player - gestures
     val playerGestures = Preference("pref_player_gestures", true)

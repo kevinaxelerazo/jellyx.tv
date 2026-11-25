@@ -35,6 +35,8 @@ import dev.jdtech.jellyfin.player.core.domain.models.Trickplay
 import dev.jdtech.jellyfin.player.local.R
 import dev.jdtech.jellyfin.player.local.cache.JellyxCacheManager
 import dev.jdtech.jellyfin.player.local.domain.DeviceCapabilityInspector
+import dev.jdtech.jellyfin.player.local.domain.PlayerEngineDecision
+import dev.jdtech.jellyfin.player.local.domain.PlayerEngineSelector
 import dev.jdtech.jellyfin.player.local.domain.PlaylistManager
 import dev.jdtech.jellyfin.player.local.mpv.MPVPlayer
 import dev.jdtech.jellyfin.repository.JellyfinRepository
@@ -102,8 +104,10 @@ internal constructor(
     var player: Player
         private set
 
+    private val isUsingTestPlayer: Boolean = testPlayer != null
     private var hasFailedOverToMpv: Boolean = false
     private var isBlockedByConcurrentLimit: Boolean = false
+    private var mpvDirectReason: String? = null
     private var mpvFallbackReason: String? = null
     private var bufferingWatchdogJob: Job? = null
     private var transitionJob: Job? = null
@@ -222,48 +226,7 @@ internal constructor(
             val playerBackend = appPreferences.getValue(appPreferences.playerBackend)
             player =
                 when (playerBackend) {
-                    "exoplayer" -> {
-                        val renderersFactory =
-                            DefaultRenderersFactory(application)
-                                .setExtensionRendererMode(
-                                    DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
-                                )
-                        val httpDataSourceFactory =
-                            DefaultHttpDataSource.Factory()
-                                .setUserAgent("VLC/3.0.20 LibVLC/3.0.20")
-                                .setAllowCrossProtocolRedirects(true)
-                                .setKeepPostFor302Redirects(true)
-                                .setConnectTimeoutMs(15_000)
-                                .setReadTimeoutMs(25_000)
-                        val upstreamFactory =
-                            DefaultDataSource.Factory(application, httpDataSourceFactory)
-                        val mediaSourceFactory =
-                            cacheManager?.let {
-                                DefaultMediaSourceFactory(
-                                    it.buildCacheDataSourceFactory(upstreamFactory)
-                                )
-                            } ?: DefaultMediaSourceFactory(upstreamFactory)
-                        val capabilities = capabilityInspector.inspect()
-                        val maxBufferMs = if (capabilities.isLowRamDevice) 60_000 else 120_000
-                        val loadControl =
-                            androidx.media3.exoplayer.DefaultLoadControl.Builder()
-                                .setBufferDurationsMs(35_000, maxBufferMs, 3_500, 6_000)
-                                .setBackBuffer(30_000, true)
-                                .build()
-                        ExoPlayer.Builder(application, renderersFactory)
-                            .setLoadControl(loadControl)
-                            .setMediaSourceFactory(mediaSourceFactory)
-                            .setAudioAttributes(audioAttributes, true)
-                            .setTrackSelector(trackSelector)
-                            .setSeekBackIncrementMs(
-                                appPreferences.getValue(appPreferences.playerSeekBackInc)
-                            )
-                            .setSeekForwardIncrementMs(
-                                appPreferences.getValue(appPreferences.playerSeekForwardInc)
-                            )
-                            .setPauseAtEndOfMediaItems(true)
-                            .build()
-                    }
+                    "exoplayer" -> buildExoPlayer(audioAttributes)
                     "mpv" -> buildMpvPlayer(audioAttributes)
 
                     else -> throw RuntimeException("$playerBackend is not a valid player backend")
@@ -280,12 +243,55 @@ internal constructor(
         }
     }
 
-    private fun buildMpvPlayer(
+    private fun buildExoPlayer(
         audioAttributes: AudioAttributes =
             AudioAttributes.Builder()
                 .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
                 .setUsage(C.USAGE_MEDIA)
                 .build()
+    ): ExoPlayer {
+        val renderersFactory =
+            DefaultRenderersFactory(application)
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+        val httpDataSourceFactory =
+            DefaultHttpDataSource.Factory()
+                .setUserAgent("VLC/3.0.20 LibVLC/3.0.20")
+                .setAllowCrossProtocolRedirects(true)
+                .setKeepPostFor302Redirects(true)
+                .setConnectTimeoutMs(15_000)
+                .setReadTimeoutMs(25_000)
+        val upstreamFactory = DefaultDataSource.Factory(application, httpDataSourceFactory)
+        val mediaSourceFactory =
+            cacheManager?.let {
+                DefaultMediaSourceFactory(it.buildCacheDataSourceFactory(upstreamFactory))
+            } ?: DefaultMediaSourceFactory(upstreamFactory)
+        val capabilities = capabilityInspector.inspect()
+        val maxBufferMs = if (capabilities.isLowRamDevice) 60_000 else 120_000
+        val loadControl =
+            androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                .setBufferDurationsMs(35_000, maxBufferMs, 3_500, 6_000)
+                .setBackBuffer(30_000, true)
+                .build()
+        return ExoPlayer.Builder(application, renderersFactory)
+            .setLoadControl(loadControl)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .setAudioAttributes(audioAttributes, true)
+            .setTrackSelector(trackSelector)
+            .setSeekBackIncrementMs(appPreferences.getValue(appPreferences.playerSeekBackInc))
+            .setSeekForwardIncrementMs(
+                appPreferences.getValue(appPreferences.playerSeekForwardInc)
+            )
+            .setPauseAtEndOfMediaItems(true)
+            .build()
+    }
+
+    private fun buildMpvPlayer(
+        audioAttributes: AudioAttributes =
+            AudioAttributes.Builder()
+                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                .setUsage(C.USAGE_MEDIA)
+                .build(),
+        isLiveTvMode: Boolean = false,
     ): MPVPlayer {
         val capabilities = capabilityInspector.inspect()
         val mpvTrackParamsBuilder = trackSelector.parameters.buildUpon()
@@ -322,7 +328,57 @@ internal constructor(
                 isLowRamDevice = capabilities.isLowRamDevice,
                 totalRamMb = capabilities.totalRamMb,
             )
+            .setLiveTvMode(isLiveTvMode)
             .build()
+    }
+
+    private fun applyDirectEngineSelection(startItem: PlayerItem) {
+        if (isUsingTestPlayer) return
+        val decision =
+            PlayerEngineSelector.selectEngine(
+                configuredBackend = appPreferences.getValue(appPreferences.playerBackend),
+                smartMpvForLiveTv = appPreferences.getValue(appPreferences.playerSmartMpvLiveTv),
+                smartMpvForAssSubtitles = appPreferences.getValue(appPreferences.playerSmartMpvAssSubs),
+                isLiveTv = startItem.isLiveTv,
+                hasAssSubtitles = startItem.hasAssSubtitles,
+            )
+        if (
+            decision == PlayerEngineDecision.MPV_LIVE_TV ||
+                decision == PlayerEngineDecision.MPV_ASS_SUBTITLES
+        ) {
+            val desiredLiveTvMode = decision == PlayerEngineDecision.MPV_LIVE_TV
+            mpvDirectReason = decision.directLabel
+            mpvFallbackReason = null
+            hasFailedOverToMpv = false
+            val currentMpv = player as? MPVPlayer
+            if (currentMpv == null || currentMpv.liveTvMode != desiredLiveTvMode) {
+                runCatching {
+                    player.removeListener(this)
+                    player.stop()
+                    player.release()
+                }
+                player = buildMpvPlayer(isLiveTvMode = desiredLiveTvMode)
+                appliedSessionTrackKey = null
+                player.addListener(this)
+                eventsChannel.trySend(PlayerEvents.PlayerSwitched(player))
+            }
+        } else if (decision == PlayerEngineDecision.EXOPLAYER) {
+            if (player is MPVPlayer && !hasFailedOverToMpv && mpvDirectReason != null) {
+                runCatching {
+                    player.removeListener(this)
+                    player.stop()
+                    player.release()
+                }
+                player = buildExoPlayer()
+                mpvDirectReason = null
+                mpvFallbackReason = null
+                appliedSessionTrackKey = null
+                player.addListener(this)
+                eventsChannel.trySend(PlayerEvents.PlayerSwitched(player))
+            } else if (player is ExoPlayer) {
+                mpvDirectReason = null
+            }
+        }
     }
 
     internal fun handleSessionAlertEvent(event: SessionAlertEvent) {
@@ -423,6 +479,7 @@ internal constructor(
 
             items = mutableListOf(startItem)
             currentMediaItemIndex = 0
+            applyDirectEngineSelection(startItem)
 
             val mediaItems = mutableListOf<MediaItem>()
             try {
@@ -1699,6 +1756,7 @@ internal constructor(
         val backendName =
             when {
                 exo != null -> "ExoPlayer (Media3)"
+                mpvDirectReason != null -> "libmpv (Directo: $mpvDirectReason)"
                 mpvFallbackReason != null -> "libmpv (Auto-Fallback: $mpvFallbackReason)"
                 else -> "libmpv (Native)"
             }

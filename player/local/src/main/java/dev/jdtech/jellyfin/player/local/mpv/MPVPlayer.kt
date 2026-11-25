@@ -80,7 +80,11 @@ class MPVPlayer(
     hwDec: String = "mediacodec",
     private val isLowRamDevice: Boolean = false,
     private val totalRamMb: Long = 4096L,
+    private val isLiveTvMode: Boolean = false,
 ) : BasePlayer(), MPVLib.EventObserver, AudioManager.OnAudioFocusChangeListener {
+    val liveTvMode: Boolean
+        get() = isLiveTvMode
+
     private val mpvLib: MPVLib
     private val audioManager: AudioManager by lazy { context.getSystemService()!! }
     private var audioFocusCallback: () -> Unit = {}
@@ -102,6 +106,7 @@ class MPVPlayer(
         hwDec = builder.hwDec,
         isLowRamDevice = builder.isLowRamDevice,
         totalRamMb = builder.totalRamMb,
+        isLiveTvMode = builder.isLiveTvMode,
     )
 
     class Builder(val context: Context) {
@@ -138,6 +143,9 @@ class MPVPlayer(
         var totalRamMb: Long = 4096L
             private set
 
+        var isLiveTvMode: Boolean = false
+            private set
+
         fun setAudioAttributes(audioAttributes: AudioAttributes, handleAudioFocus: Boolean) =
             apply {
                 this.audioAttributes = audioAttributes
@@ -171,6 +179,8 @@ class MPVPlayer(
             this.isLowRamDevice = isLowRamDevice
             this.totalRamMb = totalRamMb
         }
+
+        fun setLiveTvMode(isLiveTv: Boolean) = apply { this.isLiveTvMode = isLiveTv }
 
         fun build() = MPVPlayer(this)
     }
@@ -219,10 +229,10 @@ class MPVPlayer(
 
         // Cache
         mpvLib.setOptionString("cache", "yes")
-        mpvLib.setOptionString("cache-secs", "60")
-        mpvLib.setOptionString("demuxer-readahead-secs", "35")
+        mpvLib.setOptionString("cache-secs", if (isLiveTvMode) "30" else "60")
+        mpvLib.setOptionString("demuxer-readahead-secs", if (isLiveTvMode) "15" else "35")
         mpvLib.setOptionString("cache-pause-initial", "yes")
-        mpvLib.setOptionString("cache-pause-wait", "4")
+        mpvLib.setOptionString("cache-pause-wait", if (isLiveTvMode) "1.5" else "4")
         val (maxBytes, maxBackBytes) =
             when {
                 isLowRamDevice || totalRamMb <= 3000L -> "64MiB" to "24MiB"
