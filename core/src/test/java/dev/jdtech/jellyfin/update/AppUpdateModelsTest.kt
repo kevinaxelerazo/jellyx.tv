@@ -114,5 +114,78 @@ class AppUpdateModelsTest {
         assertEquals("https://cdn.jellyx.tv/mobile.apk", mobile?.apkUrl)
         assertNull(AppUpdateParser.parseUpdateManifestJson("{}", isTv = true))
     }
+
+    @Test
+    fun `parseGitHubReleaseListJson skips draft and prerelease and picks first stable release`() {
+        val raw =
+            """
+            [
+              {
+                "tag_name": "v0.4.0-draft",
+                "draft": true,
+                "prerelease": false,
+                "assets": [
+                  {
+                    "name": "jellyx-tv-v0.4.0-draft-release.apk",
+                    "browser_download_url": "https://gh/draft-tv.apk"
+                  }
+                ]
+              },
+              {
+                "tag_name": "v0.3.0-rc1",
+                "draft": false,
+                "prerelease": true,
+                "assets": [
+                  {
+                    "name": "jellyx-tv-v0.3.0-rc1-release.apk",
+                    "browser_download_url": "https://gh/pre-tv.apk"
+                  },
+                  {
+                    "name": "jellyx-mobile-v0.3.0-rc1-release.apk",
+                    "browser_download_url": "https://gh/pre-mobile.apk"
+                  }
+                ]
+              },
+              {
+                "tag_name": "V0.2.5",
+                "body": "Stable release",
+                "draft": false,
+                "prerelease": false,
+                "assets": [
+                  {
+                    "name": "jellyx-tv-v0.2.5-release.apk",
+                    "browser_download_url": "https://gh/v0.2.5/tv.apk"
+                  },
+                  {
+                    "name": "jellyx-tv-v0.2.5-release.apk.sha256",
+                    "browser_download_url": "https://gh/v0.2.5/tv.apk.sha256"
+                  },
+                  {
+                    "name": "jellyx-mobile-v0.2.5-release.apk",
+                    "browser_download_url": "https://gh/v0.2.5/mobile.apk"
+                  },
+                  {
+                    "name": "jellyx-mobile-v0.2.5-release.apk.sha256",
+                    "browser_download_url": "https://gh/v0.2.5/mobile.apk.sha256"
+                  }
+                ]
+              }
+            ]
+            """.trimIndent()
+
+        val parsedTv = AppUpdateParser.parseGitHubReleaseListJson(raw, isTv = true)
+        val parsedMobile = AppUpdateParser.parseGitHubReleaseListJson(raw, isTv = false)
+
+        assertNotNull(parsedTv)
+        assertNotNull(parsedMobile)
+        assertEquals("0.2.5", parsedTv!!.first.versionName)
+        assertEquals("Stable release", parsedTv.first.releaseNotes)
+        assertEquals("https://gh/v0.2.5/tv.apk", parsedTv.first.apkUrl)
+        assertEquals("https://gh/v0.2.5/tv.apk.sha256", parsedTv.second)
+
+        assertEquals("0.2.5", parsedMobile!!.first.versionName)
+        assertEquals("https://gh/v0.2.5/mobile.apk", parsedMobile.first.apkUrl)
+        assertEquals("https://gh/v0.2.5/mobile.apk.sha256", parsedMobile.second)
+    }
 }
 

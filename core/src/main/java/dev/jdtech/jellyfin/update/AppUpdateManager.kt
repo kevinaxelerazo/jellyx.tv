@@ -21,6 +21,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -74,6 +76,8 @@ constructor(
     private val _updateError = MutableStateFlow<String?>(null)
     val updateError: StateFlow<String?> = _updateError.asStateFlow()
 
+    private val checkMutex = Mutex()
+
     val currentVersionName: String
         get() = DataBuildConfig.VERSION_NAME
 
@@ -82,69 +86,25 @@ constructor(
 
     suspend fun checkForUpdates(force: Boolean = false): AppUpdateInfo? =
         withContext(Dispatchers.IO) {
-            val manifestUrl = DataBuildConfig.UPDATE_MANIFEST_URL.trim()
-            val repo = DataBuildConfig.UPDATE_REPO.trim()
-            if (manifestUrl.isBlank() && repo.isBlank()) {
-                return@withContext null
-            }
-
-            val now = System.currentTimeMillis()
-            val lastCheck = appPreferences.getValue(appPreferences.lastUpdateCheckEpochMs)
-            if (!force && lastCheck > 0L && (now - lastCheck) < CHECK_INTERVAL_MS) {
-                return@withContext _availableUpdate.value
-            }
-
-            val remoteUpdate =
-                fetchFromManifest(manifestUrl)
-                    ?: fetchFromGitHub(repo)
-                    ?: return@withContext null
-
-            appPreferences.setValue(appPreferences.lastUpdateCheckEpochMs, now)
-
-            if (
-                !AppUpdateParser.isUpdateNewer(
-                    remoteCode = remoteUpdate.versionCode,
-                    remoteName = remoteUpdate.versionName,
-                    currentCode = DataBuildConfig.VERSION_CODE,
-                    currentName = DataBuildConfig.VERSION_NAME,
-                )
-            ) {
-                clearPersistedUpdate()
-                return@withContext null
-            }
-
-            val dismissedVersion = appPreferences.getValue(appPreferences.dismissedUpdateVersion)
-            if (!remoteUpdate.mandatory && !force && dismissedVersion == remoteUpdate.versionName) {
-                return@withContext null
-            }
-
-            persistAvailableUpdate(remoteUpdate)
-            remoteUpdate
-        }
-
-    suspend fun checkForUpdatesManually(): ManualUpdateCheckResult =
-        withContext(Dispatchers.IO) {
-            _isCheckingForUpdates.value = true
-            try {
+            checkMutex.withLock {
                 val manifestUrl = DataBuildConfig.UPDATE_MANIFEST_URL.trim()
                 val repo = DataBuildConfig.UPDATE_REPO.trim()
                 if (manifestUrl.isBlank() && repo.isBlank()) {
-                    return@withContext ManualUpdateCheckResult.Error(
-                        "No hay repositorio de actualizaciones configurado."
-                    )
+                    return@withLock null
                 }
 
-                val remoteUpdate = fetchFromManifest(manifestUrl) ?: fetchFromGitHub(repo)
-                if (remoteUpdate == null) {
-                    return@withContext ManualUpdateCheckResult.Error(
-                        "No se encontraron releases publicados en $repo o sin conexión."
-                    )
+                val now = System.currentTimeMillis()
+                val lastCheck = appPreferences.getValue(appPreferences.lastUpdateCheckEpochMs)
+                if (!force && lastCheck > 0L && (now - lastCheck) < CHECK_INTERVAL_MS) {
+                    return@withLock _availableUpdate.value
                 }
 
-                appPreferences.setValue(
-                    appPreferences.lastUpdateCheckEpochMs,
-                    System.currentTimeMillis(),
-                )
+                val remoteUpdate =
+                    fetchFromManifest(manifestUrl)
+                        ?: fetchFromGitHub(repo)
+                        ?: return@withLock null
+
+                appPreferences.setValue(appPreferences.lastUpdateCheckEpochMs, now)
 
                 if (
                     !AppUpdateParser.isUpdateNewer(
@@ -155,14 +115,62 @@ constructor(
                     )
                 ) {
                     clearPersistedUpdate()
-                    return@withContext ManualUpdateCheckResult.UpToDate(DataBuildConfig.VERSION_NAME)
+                    return@withLock null
                 }
 
-                appPreferences.setValue(appPreferences.dismissedUpdateVersion, null)
+                val dismissedVersion = appPreferences.getValue(appPreferences.dismissedUpdateVersion)
+                if (!remoteUpdate.mandatory && !force && dismissedVersion == remoteUpdate.versionName) {
+                    return@withLock null
+                }
+
                 persistAvailableUpdate(remoteUpdate)
-                ManualUpdateCheckResult.UpdateAvailable(remoteUpdate)
-            } finally {
-                _isCheckingForUpdates.value = false
+                remoteUpdate
+            }
+        }
+
+    suspend fun checkForUpdatesManually(): ManualUpdateCheckResult =
+        withContext(Dispatchers.IO) {
+            checkMutex.withLock {
+                _isCheckingForUpdates.value = true
+                try {
+                    val manifestUrl = DataBuildConfig.UPDATE_MANIFEST_URL.trim()
+                    val repo = DataBuildConfig.UPDATE_REPO.trim()
+                    if (manifestUrl.isBlank() && repo.isBlank()) {
+                        return@withLock ManualUpdateCheckResult.Error(
+                            "No hay repositorio de actualizaciones configurado."
+                        )
+                    }
+
+                    val remoteUpdate = fetchFromManifest(manifestUrl) ?: fetchFromGitHub(repo)
+                    if (remoteUpdate == null) {
+                        return@withLock ManualUpdateCheckResult.Error(
+                            "No se encontraron releases publicados en $repo o sin conexión."
+                        )
+                    }
+
+                    appPreferences.setValue(
+                        appPreferences.lastUpdateCheckEpochMs,
+                        System.currentTimeMillis(),
+                    )
+
+                    if (
+                        !AppUpdateParser.isUpdateNewer(
+                            remoteCode = remoteUpdate.versionCode,
+                            remoteName = remoteUpdate.versionName,
+                            currentCode = DataBuildConfig.VERSION_CODE,
+                            currentName = DataBuildConfig.VERSION_NAME,
+                        )
+                    ) {
+                        clearPersistedUpdate()
+                        return@withLock ManualUpdateCheckResult.UpToDate(DataBuildConfig.VERSION_NAME)
+                    }
+
+                    appPreferences.setValue(appPreferences.dismissedUpdateVersion, null)
+                    persistAvailableUpdate(remoteUpdate)
+                    ManualUpdateCheckResult.UpdateAvailable(remoteUpdate)
+                } finally {
+                    _isCheckingForUpdates.value = false
+                }
             }
         }
 
@@ -307,7 +315,11 @@ constructor(
     private fun fetchFromManifest(manifestUrl: String): AppUpdateInfo? {
         if (manifestUrl.isBlank()) return null
         return runCatching {
-            val req = Request.Builder().url(manifestUrl).build()
+            val req =
+                Request.Builder()
+                    .url(manifestUrl)
+                    .header("User-Agent", "Jellyx.tv/${DataBuildConfig.VERSION_NAME}")
+                    .build()
             httpClient.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return null
                 val raw = resp.body.string()
@@ -318,32 +330,61 @@ constructor(
 
     private fun fetchFromGitHub(repo: String): AppUpdateInfo? {
         if (repo.isBlank()) return null
+        val latestUrl = "https://api.github.com/repos/$repo/releases/latest"
+        val releasesUrl = "https://api.github.com/repos/$repo/releases?per_page=5"
+
+        val parsed =
+            fetchGitHubReleasePair(latestUrl, "releases/latest", repo) { raw ->
+                AppUpdateParser.parseGitHubReleaseJson(raw, isTelevisionDevice)
+            }
+                ?: fetchGitHubReleasePair(releasesUrl, "releases?per_page=5", repo) { raw ->
+                    AppUpdateParser.parseGitHubReleaseListJson(raw, isTelevisionDevice)
+                }
+                ?: return null
+
+        val (info, shaAssetUrl) = parsed
+        Timber.i("Resolved GitHub release tag %s for %s", info.versionName, repo)
+        val resolvedSha =
+            if (!shaAssetUrl.isNullOrBlank()) {
+                fetchSidecarSha256(shaAssetUrl, info.apkUrl.substringAfterLast('/'))
+            } else {
+                null
+            }
+        return info.copy(sha256 = resolvedSha)
+    }
+
+    private inline fun fetchGitHubReleasePair(
+        apiUrl: String,
+        endpointName: String,
+        repo: String,
+        parser: (String) -> Pair<AppUpdateInfo, String?>?,
+    ): Pair<AppUpdateInfo, String?>? {
         return runCatching {
-            val apiUrl = "https://api.github.com/repos/$repo/releases/latest"
             val req =
                 Request.Builder()
                     .url(apiUrl)
+                    .header("User-Agent", "Jellyx.tv/${DataBuildConfig.VERSION_NAME}")
                     .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28")
                     .build()
             httpClient.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return null
-                val raw = resp.body.string()
-                val (info, shaAssetUrl) =
-                    AppUpdateParser.parseGitHubReleaseJson(raw, isTelevisionDevice) ?: return null
-                val resolvedSha =
-                    if (!shaAssetUrl.isNullOrBlank()) {
-                        fetchSidecarSha256(shaAssetUrl, info.apkUrl.substringAfterLast('/'))
-                    } else {
-                        null
-                    }
-                info.copy(sha256 = resolvedSha)
+                if (!resp.isSuccessful) {
+                    Timber.w("GitHub %s HTTP %d for %s", endpointName, resp.code, repo)
+                    null
+                } else {
+                    parser(resp.body.string())
+                }
             }
-        }.onFailure { Timber.w(it, "Failed to fetch GitHub release for %s", repo) }.getOrNull()
+        }.onFailure { Timber.w(it, "Failed to fetch GitHub %s for %s", endpointName, repo) }.getOrNull()
     }
 
     private fun fetchSidecarSha256(url: String, apkFileName: String): String? {
         return runCatching {
-            val req = Request.Builder().url(url).build()
+            val req =
+                Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Jellyx.tv/${DataBuildConfig.VERSION_NAME}")
+                    .build()
             httpClient.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return null
                 AppUpdateParser.extractSha256FromText(resp.body.string(), apkFileName)

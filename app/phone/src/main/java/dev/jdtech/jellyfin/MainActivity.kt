@@ -55,9 +55,6 @@ class MainActivity : AppCompatActivity() {
             }
             isSeedReady.value = true
         }
-        lifecycleScope.launch(Dispatchers.IO) {
-            appUpdateManager.checkForUpdates(force = false)
-        }
 
         setContent {
             val state by viewModel.state.collectAsStateWithLifecycle()
@@ -119,6 +116,13 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        lifecycleScope.launch(Dispatchers.IO) {
+            appUpdateManager.checkForUpdates(force = false)
         }
     }
 }

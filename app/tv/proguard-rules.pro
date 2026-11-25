@@ -30,3 +30,11 @@
 -dontwarn org.openjsse.net.ssl.OpenJSSE
 
 -keep class dev.jdtech.**
+
+# Keep auto-updater kotlinx.serialization models & serializers in release builds
+-keepattributes *Annotation*, InnerClasses
+-keep class dev.jdtech.jellyfin.update.** { *; }
+-keepclassmembers class dev.jdtech.jellyfin.update.** {
+    *** Companion;
+    kotlinx.serialization.KSerializer serializer(...);
+}

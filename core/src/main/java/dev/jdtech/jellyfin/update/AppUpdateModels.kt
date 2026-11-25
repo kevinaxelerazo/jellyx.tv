@@ -128,6 +128,19 @@ object AppUpdateParser {
     fun parseGitHubReleaseJson(rawJson: String, isTv: Boolean): Pair<AppUpdateInfo, String?>? {
         val release = runCatching { json.decodeFromString<GitHubReleaseDto>(rawJson) }.getOrNull()
             ?: return null
+        return mapGitHubRelease(release, isTv)
+    }
+
+    fun parseGitHubReleaseListJson(rawJson: String, isTv: Boolean): Pair<AppUpdateInfo, String?>? {
+        val releases = runCatching { json.decodeFromString<List<GitHubReleaseDto>>(rawJson) }.getOrNull()
+            ?: return null
+        for (release in releases) {
+            mapGitHubRelease(release, isTv)?.let { return it }
+        }
+        return null
+    }
+
+    private fun mapGitHubRelease(release: GitHubReleaseDto, isTv: Boolean): Pair<AppUpdateInfo, String?>? {
         if (release.draft || release.prerelease) return null
 
         val mappedAssets =
