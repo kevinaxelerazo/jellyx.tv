@@ -12,9 +12,10 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.roundToLong
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import timber.log.Timber
@@ -104,6 +105,10 @@ class SegmentResolver(
         parseSegmentObject(json["Credits"] as? JsonObject, JellyxSegmentType.OUTRO)
             ?.let(result::add)
 
+        if (result.isEmpty() && !json.containsKey("Introduction") && !json.containsKey("Credits")) {
+            parseSegmentObject(json, JellyxSegmentType.INTRO)?.let(result::add)
+        }
+
         return result
     }
 
@@ -112,8 +117,10 @@ class SegmentResolver(
         type: JellyxSegmentType,
     ): JellyxSegment? {
         obj ?: return null
-        val startSec = obj["IntroStart"]?.jsonPrimitive?.doubleOrNull ?: return null
-        val endSec = obj["IntroEnd"]?.jsonPrimitive?.doubleOrNull ?: return null
+        val isValid = (obj["Valid"] as? JsonPrimitive)?.booleanOrNull
+        if (isValid == false) return null
+        val startSec = (obj["IntroStart"] as? JsonPrimitive)?.doubleOrNull ?: return null
+        val endSec = (obj["IntroEnd"] as? JsonPrimitive)?.doubleOrNull ?: return null
         if (endSec <= startSec) return null
         return JellyxSegment(
             type = type,

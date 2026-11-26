@@ -168,6 +168,7 @@ internal constructor(
         val currentSeriesId: UUID? = null,
         val seasonEpisodes: List<JellyxEpisode> = emptyList(),
         val isPlaybackBlockedByLimit: Boolean = false,
+        val hasNextEpisode: Boolean = false,
     )
 
     private var items: MutableList<PlayerItem> = mutableListOf()
@@ -785,6 +786,7 @@ internal constructor(
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         Timber.d("Playing MediaItem: ${mediaItem?.mediaId}")
+        currentMediaItemSegments = emptyList()
         appliedSessionTrackKey = null
         neighborsLoadedForItemId = null
         savedStateHandle["mediaItemIndex"] = player.currentMediaItemIndex
@@ -837,6 +839,9 @@ internal constructor(
                             currentSeasonId = seasonAndSeries?.first,
                             currentSeriesId = seasonAndSeries?.second,
                             seasonEpisodes = seasonEpisodes,
+                            hasNextEpisode =
+                                player.hasNextMediaItem() ||
+                                    currentMediaItemIndex < items.lastIndex,
                         )
                     }
                     startBufferingWatchdogIfNeeded()
@@ -881,14 +886,36 @@ internal constructor(
         if (_uiState.value.isLiveTv) return
         val activeMediaId = player.currentMediaItem?.mediaId ?: return
         val activeItemId = runCatching { UUID.fromString(activeMediaId) }.getOrNull() ?: return
+        val isActiveMatched =
+            items.getOrNull(currentMediaItemIndex)?.itemId == activeItemId ||
+                player.currentMediaItem?.mediaId == activeMediaId
+        if (!isActiveMatched) return
         if (neighborsLoadedForItemId == activeItemId) return
         neighborsLoadedForItemId = activeItemId
 
         viewModelScope.launch {
+            var insertedNext = false
+            val nextItem = playlistManager.getNextPlayerItem()
+            if (
+                nextItem != null &&
+                    (items.getOrNull(currentMediaItemIndex)?.itemId == activeItemId ||
+                        player.currentMediaItem?.mediaId == activeMediaId) &&
+                    items.none { it.itemId == nextItem.itemId }
+            ) {
+                val currentIdx = items.indexOfFirst { it.itemId == activeItemId }
+                if (currentIdx >= 0) {
+                    items.add(currentIdx + 1, nextItem)
+                    player.addMediaItem(currentIdx + 1, nextItem.toMediaItem())
+                    insertedNext = true
+                    _uiState.update { it.copy(hasNextEpisode = true) }
+                }
+            }
+
             val previousItem = playlistManager.getPreviousPlayerItem()
             if (
                 previousItem != null &&
-                    player.currentMediaItem?.mediaId == activeMediaId &&
+                    (items.getOrNull(currentMediaItemIndex)?.itemId == activeItemId ||
+                        player.currentMediaItem?.mediaId == activeMediaId) &&
                     items.none { it.itemId == previousItem.itemId }
             ) {
                 val currentIdx = items.indexOfFirst { it.itemId == activeItemId }
@@ -900,17 +927,13 @@ internal constructor(
                 }
             }
 
-            val nextItem = playlistManager.getNextPlayerItem()
-            if (
-                nextItem != null &&
-                    player.currentMediaItem?.mediaId == activeMediaId &&
-                    items.none { it.itemId == nextItem.itemId }
-            ) {
-                val currentIdx = items.indexOfFirst { it.itemId == activeItemId }
-                if (currentIdx >= 0) {
-                    items.add(currentIdx + 1, nextItem)
-                    player.addMediaItem(currentIdx + 1, nextItem.toMediaItem())
-                }
+            if (!insertedNext) {
+                val hasNext =
+                    player.hasNextMediaItem() ||
+                        items.indexOfFirst { it.itemId == activeItemId }.let { idx ->
+                            idx >= 0 && idx < items.lastIndex
+                        }
+                _uiState.update { it.copy(hasNextEpisode = hasNext) }
             }
         }
     }
@@ -1428,9 +1451,11 @@ internal constructor(
 
     // Check if the outro segment's end time is within n milliseconds of the player's total duration
     private fun shouldSkipToNextEpisode(segment: JellyxSegment): Boolean {
-        return if (segment.type == JellyxSegmentType.OUTRO && player.hasNextMediaItem()) {
-            val segmentEndTimeMillis = segment.endTicks
+        val hasNext = player.hasNextMediaItem() || _uiState.value.hasNextEpisode
+        return if (segment.type == JellyxSegmentType.OUTRO && hasNext) {
             val playerDurationMillis = player.duration
+            if (playerDurationMillis <= 0L) return false
+            val segmentEndTimeMillis = segment.endTicks
             val thresholdMillis =
                 playerDurationMillis -
                     appPreferences.getValue(appPreferences.playerMediaSegmentsNextEpisodeThreshold)
@@ -1652,13 +1677,25 @@ internal constructor(
                 vFormat?.frameRate?.takeIf { it > 0f }?.let { String.format("%.2f fps", it) }
                     ?: "N/A"
             }
-        val videoCodec =
+        val rawVideoCodec =
             if (mpvStats != null) {
                 mpvStats.videoCodec?.uppercase() ?: "Auto"
             } else {
                 vFormat?.sampleMimeType?.substringAfter("/")?.uppercase()
                     ?: vFormat?.codecs
                     ?: "Auto"
+            }
+        val videoCodec =
+            when {
+                rawVideoCodec.contains("HEVC") ||
+                    rawVideoCodec.contains("H265") ||
+                    rawVideoCodec.contains("H.265") -> "HEVC"
+                rawVideoCodec.contains("H264") ||
+                    rawVideoCodec.contains("H.264") ||
+                    rawVideoCodec.contains("AVC") -> "H.264"
+                rawVideoCodec.contains("AV1") -> "AV1"
+                rawVideoCodec.contains("VP9") -> "VP9"
+                else -> rawVideoCodec
             }
         val videoCodecProfile =
             if (mpvStats != null) {

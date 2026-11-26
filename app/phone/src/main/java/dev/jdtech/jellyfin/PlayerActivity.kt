@@ -11,8 +11,6 @@ import android.graphics.Rect
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.Process
 import android.util.Rational
 import android.view.SurfaceView
@@ -42,6 +40,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,6 +50,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -100,6 +101,7 @@ import dev.jdtech.jellyfin.models.JellyxChannel
 import dev.jdtech.jellyfin.models.JellyxEpisode
 import dev.jdtech.jellyfin.models.JellyxItem
 import dev.jdtech.jellyfin.models.JellyxShow
+import dev.jdtech.jellyfin.player.local.R as PlayerLocalR
 import dev.jdtech.jellyfin.player.local.presentation.PlayerEvents
 import dev.jdtech.jellyfin.player.local.presentation.PlayerViewModel
 import dev.jdtech.jellyfin.presentation.player.SpeedSelectionDialogFragment
@@ -131,7 +133,6 @@ class PlayerActivity : BasePlayerActivity() {
     override val viewModel: PlayerViewModel by viewModels()
     private var previewScrubListener: PreviewScrubListener? = null
     private var wasZoom: Boolean = false
-    private var skipButtonTimeoutExpired: Boolean = true
     private val isControllerVisibleState = mutableStateOf(false)
     private val showLiveChannelDrawerState = mutableStateOf(false)
     private val showEpisodesDrawerState = mutableStateOf(false)
@@ -159,14 +160,6 @@ class PlayerActivity : BasePlayerActivity() {
             Process.myUid(),
             packageName,
         ) == AppOpsManager.MODE_ALLOWED
-    }
-
-    private val handler = Handler(Looper.getMainLooper())
-    private val skipButtonTimeout = Runnable {
-        if (!binding.playerView.isControllerFullyVisible) {
-            skipSegmentButton.isVisible = false
-            skipButtonTimeoutExpired = true
-        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -226,7 +219,13 @@ class PlayerActivity : BasePlayerActivity() {
 
                         Box(modifier = Modifier.fillMaxSize()) {
                             if (isBufferingState.value && !state.playbackEnded && !inPip) {
-                                JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center))
+                                Box(
+                                    modifier =
+                                        Modifier.fillMaxSize()
+                                            .windowInsetsPadding(WindowInsets.displayCutout)
+                                ) {
+                                    JellyxLoadingLogo(modifier = Modifier.align(Alignment.Center))
+                                }
                             }
 
                             // 2. Left Edge Handle
@@ -450,9 +449,7 @@ class PlayerActivity : BasePlayerActivity() {
                 if (visibility == View.GONE) {
                     hideSystemUI()
                 }
-                if (skipButtonTimeoutExpired && viewModel.uiState.value.currentSegment != null) {
-                    skipSegmentButton.visibility = visibility
-                }
+                updateSkipSegmentButton()
             }
         )
 
@@ -665,26 +662,8 @@ class PlayerActivity : BasePlayerActivity() {
                                 else CoreR.drawable.ic_heart
                             )
 
-                            // Media segment
-                            currentSegment?.let { segment ->
-                                // Skip Button - text
-                                skipSegmentButton.text = getString(currentSkipButtonStringRes)
-                                // Skip Button - visibility
-                                skipSegmentButton.isVisible = !isInPictureInPictureMode
-                                if (skipSegmentButton.isVisible) {
-                                    skipButtonTimeoutExpired = false
-                                    handler.removeCallbacks(skipButtonTimeout)
-                                    handler.postDelayed(
-                                        skipButtonTimeout,
-                                        viewModel.segmentsSkipButtonDuration * 1000,
-                                    )
-                                }
-                                // Skip Button - onClick
-                                skipSegmentButton.setOnClickListener {
-                                    viewModel.skipSegment(segment)
-                                    skipSegmentButton.isVisible = false
-                                }
-                            } ?: run { skipSegmentButton.isVisible = false }
+                            // Media segment & fallback next episode
+                            updateSkipSegmentButton()
 
                             // Trickplay
                             previewScrubListener?.let { it.currentTrickplay = currentTrickplay }
@@ -784,15 +763,16 @@ class PlayerActivity : BasePlayerActivity() {
                     }
                 }
 
-                if (
+                val segmentsEnabled =
                     appPreferences.getValue(appPreferences.playerMediaSegmentsSkipButton) ||
                         appPreferences.getValue(appPreferences.playerMediaSegmentsAutoSkip)
-                ) {
-                    launch {
-                        while (true) {
+                launch {
+                    while (true) {
+                        if (segmentsEnabled) {
                             viewModel.updateCurrentSegment()
-                            delay(1000L)
                         }
+                        updateSkipSegmentButton()
+                        delay(1000L)
                     }
                 }
             }
@@ -832,6 +812,7 @@ class PlayerActivity : BasePlayerActivity() {
             lockedLayout.visibility = View.VISIBLE
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
             isControlsLocked = true
+            updateSkipSegmentButton()
         }
 
         unlockButton.setOnClickListener {
@@ -839,6 +820,7 @@ class PlayerActivity : BasePlayerActivity() {
             lockedLayout.visibility = View.GONE
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             isControlsLocked = false
+            updateSkipSegmentButton()
         }
 
         subtitleButton.setOnClickListener {
@@ -915,8 +897,56 @@ class PlayerActivity : BasePlayerActivity() {
         } catch (e: Exception) {
             Timber.e(e)
         }
-        handler.removeCallbacks(skipButtonTimeout)
         finish()
+    }
+
+    private fun updateSkipSegmentButton() {
+        if (!::skipSegmentButton.isInitialized) return
+        val state = viewModel.uiState.value
+        val canShow = !isInPictureInPictureMode && !state.playbackEnded && !isControlsLocked
+        if (!canShow) {
+            skipSegmentButton.isVisible = false
+            return
+        }
+
+        val segment = state.currentSegment
+        if (segment != null) {
+            skipSegmentButton.text = getString(state.currentSkipButtonStringRes)
+            skipSegmentButton.isVisible = true
+            skipSegmentButton.setOnClickListener {
+                viewModel.skipSegment(segment)
+                skipSegmentButton.isVisible = false
+            }
+            return
+        }
+
+        val player = viewModel.player
+        val durationMs = player.duration
+        val positionMs = player.currentPosition
+        val remainingMs =
+            if (durationMs > 0L && positionMs >= 0L) {
+                (durationMs - positionMs).coerceAtLeast(0L)
+            } else {
+                0L
+            }
+        val showFallbackNextEpisode =
+            !state.isLiveTv &&
+                (player.hasNextMediaItem() || state.hasNextEpisode) &&
+                durationMs > 0L &&
+                remainingMs in 1L..30_000L
+
+        if (showFallbackNextEpisode) {
+            val remainingSeconds = (remainingMs / 1000L).toInt()
+            skipSegmentButton.text =
+                "${getString(PlayerLocalR.string.player_controls_next_episode)} (${remainingSeconds}s)"
+            skipSegmentButton.isVisible = true
+            skipSegmentButton.setOnClickListener {
+                player.seekToNextMediaItem()
+                skipSegmentButton.isVisible = false
+            }
+        } else {
+            skipSegmentButton.isVisible = false
+        }
     }
 
     private fun pipParams(
@@ -1004,6 +1034,7 @@ class PlayerActivity : BasePlayerActivity() {
             false -> {
                 binding.playerView.useController = true
                 playerGestureHelper?.updateZoomMode(wasZoom)
+                updateSkipSegmentButton()
 
                 // Override auto brightness
                 if (

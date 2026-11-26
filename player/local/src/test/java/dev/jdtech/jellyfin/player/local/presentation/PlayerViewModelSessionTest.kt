@@ -1,13 +1,18 @@
 package dev.jdtech.jellyfin.player.local.presentation
 
 import android.app.Application
+import android.content.SharedPreferences
 import androidx.lifecycle.SavedStateHandle
 import androidx.media3.common.C
 import androidx.media3.common.Format
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.Tracks
+import dev.jdtech.jellyfin.models.JellyxSegment
+import dev.jdtech.jellyfin.models.JellyxSegmentType
 import dev.jdtech.jellyfin.player.core.domain.models.PlayerItem
+import dev.jdtech.jellyfin.player.local.R
 import dev.jdtech.jellyfin.player.local.domain.DeviceCapabilityInspector
 import dev.jdtech.jellyfin.player.local.domain.PlaylistManager
 import dev.jdtech.jellyfin.repository.JellyfinRepository
@@ -19,7 +24,9 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import java.util.UUID
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -31,8 +38,10 @@ import kotlinx.coroutines.test.setMain
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -42,6 +51,10 @@ class PlayerViewModelSessionTest {
     private lateinit var testDispatcher: kotlinx.coroutines.test.TestDispatcher
     private lateinit var mockPlayer: Player
     private lateinit var playlistManager: PlaylistManager
+    private lateinit var repository: JellyfinRepository
+    private lateinit var appPreferences: AppPreferences
+    private lateinit var capabilityInspector: DeviceCapabilityInspector
+    private lateinit var sessionEventManager: SessionEventManager
     private lateinit var eventsFlow: MutableSharedFlow<SessionAlertEvent>
     private lateinit var viewModel: PlayerViewModel
 
@@ -54,8 +67,8 @@ class PlayerViewModelSessionTest {
 
         val app = mockk<Application>(relaxed = true)
         playlistManager = mockk(relaxed = true)
-        val repository = mockk<JellyfinRepository>(relaxed = true)
-        val appPreferences = mockk<AppPreferences>(relaxed = true)
+        repository = mockk(relaxed = true)
+        appPreferences = mockk(relaxed = true)
         every { appPreferences.getValue(appPreferences.playerMediaSegmentsSkipButton) } returns
             false
         every { appPreferences.getValue(appPreferences.playerMediaSegmentsSkipButtonType) } returns
@@ -68,22 +81,28 @@ class PlayerViewModelSessionTest {
             emptySet()
         every { appPreferences.getValue(appPreferences.playerMediaSegmentsAutoSkipMode) } returns
             "always"
-        val capabilityInspector = mockk<DeviceCapabilityInspector>(relaxed = true)
-        val sessionEventManager = mockk<SessionEventManager>(relaxed = true)
+        capabilityInspector = mockk(relaxed = true)
+        sessionEventManager = mockk(relaxed = true)
         every { sessionEventManager.events } returns eventsFlow
         every { sessionEventManager.syncPlayEvents } returns MutableSharedFlow()
 
-        viewModel =
-            PlayerViewModel(
-                application = app,
-                playlistManager = playlistManager,
-                repository = repository,
-                appPreferences = appPreferences,
-                capabilityInspector = capabilityInspector,
-                sessionEventManager = sessionEventManager,
-                savedStateHandle = SavedStateHandle(),
-                testPlayer = mockPlayer,
-            )
+        viewModel = createViewModel(app)
+    }
+
+    private fun createViewModel(
+        app: Application = mockk(relaxed = true),
+        prefs: AppPreferences = appPreferences,
+    ): PlayerViewModel {
+        return PlayerViewModel(
+            application = app,
+            playlistManager = playlistManager,
+            repository = repository,
+            appPreferences = prefs,
+            capabilityInspector = capabilityInspector,
+            sessionEventManager = sessionEventManager,
+            savedStateHandle = SavedStateHandle(),
+            testPlayer = mockPlayer,
+        )
     }
 
     @After
@@ -220,4 +239,163 @@ class PlayerViewModelSessionTest {
         verify { mockPlayer.prepare() }
         verify { mockPlayer.play() }
     }
+
+    @Test
+    fun `loadAdjacentEpisodesIfNeeded inserts nextItem before previousItem at index 0 and sets hasNextEpisode`() =
+        runTest {
+            val ep3Id = UUID.randomUUID()
+            val ep4Id = UUID.randomUUID()
+            val ep5Id = UUID.randomUUID()
+            val ep3 =
+                PlayerItem(
+                    name = "Episode 3",
+                    itemId = ep3Id,
+                    mediaSourceId = "src-3",
+                    playbackPosition = 0L,
+                    mediaSourceUri = "https://jellyx.test/ep3.mkv",
+                    parentIndexNumber = 1,
+                    indexNumber = 3,
+                )
+            val ep4 =
+                PlayerItem(
+                    name = "Episode 4",
+                    itemId = ep4Id,
+                    mediaSourceId = "src-4",
+                    playbackPosition = 0L,
+                    mediaSourceUri = "https://jellyx.test/ep4.mkv",
+                    parentIndexNumber = 1,
+                    indexNumber = 4,
+                )
+            val ep5 =
+                PlayerItem(
+                    name = "Episode 5",
+                    itemId = ep5Id,
+                    mediaSourceId = "src-5",
+                    playbackPosition = 0L,
+                    mediaSourceUri = "https://jellyx.test/ep5.mkv",
+                    parentIndexNumber = 1,
+                    indexNumber = 5,
+                )
+            coEvery {
+                playlistManager.getInitialItem(
+                    itemId = ep4Id,
+                    itemKind = BaseItemKind.EPISODE,
+                    mediaSourceIndex = null,
+                    startFromBeginning = false,
+                )
+            } returns ep4
+            coEvery { playlistManager.getNextPlayerItem() } returns ep5
+            coEvery { playlistManager.getPreviousPlayerItem() } returns ep3
+            every { mockPlayer.currentMediaItem } returns
+                MediaItem.Builder().setMediaId(ep4Id.toString()).build()
+            every { mockPlayer.hasNextMediaItem() } returns false
+
+            viewModel.switchToEpisode(ep4Id)
+            viewModel.onPlaybackStateChanged(Player.STATE_READY)
+
+            verifyOrder {
+                mockPlayer.addMediaItem(1, match { it.mediaId == ep5Id.toString() })
+                mockPlayer.addMediaItem(0, match { it.mediaId == ep3Id.toString() })
+            }
+            assertTrue(viewModel.uiState.value.hasNextEpisode)
+        }
+
+    @Test
+    fun `onMediaItemTransition clears previous episode segments immediately before network load`() =
+        runTest {
+            val sharedPrefs =
+                mockk<SharedPreferences>(relaxed = true) {
+                    every { getBoolean("pref_player_media_segments_skip_button", true) } returns
+                        true
+                    every {
+                        getStringSet(
+                            "pref_player_media_segments_skip_button_type",
+                            setOf("INTRO", "OUTRO"),
+                        )
+                    } returns setOf("INTRO", "OUTRO")
+                    every { getLong("pref_player_media_segments_skip_button_duration", 5L) } returns
+                        5L
+                    every { getBoolean("pref_player_media_segments_auto_skip", false) } returns
+                        false
+                    every {
+                        getStringSet(
+                            "pref_player_media_segments_auto_skip_type",
+                            setOf("INTRO", "OUTRO"),
+                        )
+                    } returns emptySet()
+                    every {
+                        getString("pref_player_media_segments_auto_skip_mode", "always")
+                    } returns "always"
+                    every {
+                        getLong("pref_player_media_segments_next_episode_threshold", 5_000L)
+                    } returns 5_000L
+                    every { getString("pref_player_backend", any()) } returns "exoplayer"
+                }
+            val localPrefs = AppPreferences(sharedPrefs)
+
+            val segmentVm = createViewModel(prefs = localPrefs)
+            val ep1Id = UUID.randomUUID()
+            val ep2Id = UUID.randomUUID()
+            val ep1 =
+                PlayerItem(
+                    name = "Episode 1",
+                    itemId = ep1Id,
+                    mediaSourceId = "src-1",
+                    playbackPosition = 0L,
+                    mediaSourceUri = "https://jellyx.test/ep1.mkv",
+                    parentIndexNumber = 1,
+                    indexNumber = 1,
+                )
+            val ep2 =
+                PlayerItem(
+                    name = "Episode 2",
+                    itemId = ep2Id,
+                    mediaSourceId = "src-2",
+                    playbackPosition = 0L,
+                    mediaSourceUri = "https://jellyx.test/ep2.mkv",
+                    parentIndexNumber = 1,
+                    indexNumber = 2,
+                )
+            coEvery {
+                playlistManager.getInitialItem(
+                    itemId = ep1Id,
+                    itemKind = BaseItemKind.EPISODE,
+                    mediaSourceIndex = null,
+                    startFromBeginning = false,
+                )
+            } returns ep1
+            coEvery { playlistManager.getNextPlayerItem() } returns ep2
+            coEvery { playlistManager.getPreviousPlayerItem() } returns null
+            every { playlistManager.getCurrentEpisodeSeasonAndSeries() } returns null
+            every { playlistManager.getSeasonEpisodes() } returns emptyList()
+
+            val ep1Intro = JellyxSegment(JellyxSegmentType.INTRO, 10_000L, 60_000L)
+            val ep2Deferred = CompletableDeferred<List<JellyxSegment>>()
+            coEvery { repository.getSegments(ep1Id) } returns listOf(ep1Intro)
+            coEvery { repository.getSegments(ep2Id) } coAnswers { ep2Deferred.await() }
+
+            val ep1MediaItem = MediaItem.Builder().setMediaId(ep1Id.toString()).build()
+            val ep2MediaItem = MediaItem.Builder().setMediaId(ep2Id.toString()).build()
+
+            every { mockPlayer.currentMediaItem } returns ep1MediaItem
+            every { mockPlayer.currentPosition } returns 20_000L
+            segmentVm.switchToEpisode(ep1Id)
+            segmentVm.onMediaItemTransition(ep1MediaItem, Player.MEDIA_ITEM_TRANSITION_REASON_AUTO)
+            segmentVm.onPlaybackStateChanged(Player.STATE_READY)
+            segmentVm.updateCurrentSegment()
+
+            assertEquals(ep1Intro, segmentVm.uiState.value.currentSegment)
+            assertTrue(segmentVm.uiState.value.hasNextEpisode)
+
+            // Transition to ep2 while ep2 segments are still loading over network
+            every { mockPlayer.currentMediaItem } returns ep2MediaItem
+            every { mockPlayer.currentMediaItemIndex } returns 1
+            segmentVm.onMediaItemTransition(ep2MediaItem, Player.MEDIA_ITEM_TRANSITION_REASON_AUTO)
+            segmentVm.updateCurrentSegment()
+
+            assertNull(segmentVm.uiState.value.currentSegment)
+            assertFalse(segmentVm.uiState.value.hasNextEpisode)
+
+            ep2Deferred.complete(emptyList())
+        }
 }

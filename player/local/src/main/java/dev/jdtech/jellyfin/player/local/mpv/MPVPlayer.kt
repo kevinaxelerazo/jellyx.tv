@@ -2,6 +2,7 @@ package dev.jdtech.jellyfin.player.local.mpv
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Surface
@@ -90,6 +91,20 @@ class MPVPlayer(
     private var audioFocusCallback: () -> Unit = {}
     private lateinit var audioFocusRequest: AudioFocusRequestCompat
     private val handler: Handler = Handler(context.mainLooper)
+    private val isLowEndProfile: Boolean = isLowRamDevice || totalRamMb <= 4500L
+    private val effectiveVideoOutput: String =
+        if (isLowEndProfile && videoOutput == "gpu-next") "gpu" else videoOutput
+    private var isSurfaceAttached: Boolean = false
+    private var pendingPrepare: Boolean = false
+    private val pendingPrepareFallbackRunnable = Runnable {
+        if (pendingPrepare && !isReleased) {
+            pendingPrepare = false
+            executePrepare()
+            if (currentPlayWhenReady) {
+                mpvLib.setPropertyBoolean("pause", false)
+            }
+        }
+    }
 
     private constructor(
         builder: Builder
@@ -201,22 +216,33 @@ class MPVPlayer(
             opt,
             cacheDir.path,
         )
-        val isLowEndProfile = isLowRamDevice || totalRamMb <= 4500L
-        val effectiveVideoOutput = if (isLowEndProfile && videoOutput == "gpu-next") "gpu" else videoOutput
+        val useAudioTrackFallback =
+            isLowRamDevice || totalRamMb <= 3500L || Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q
+        val effectiveAudioOutput =
+            if (useAudioTrackFallback && audioOutput == "aaudio") "audiotrack" else audioOutput
         mpvLib.setOptionString("profile", "fast")
         mpvLib.setOptionString("vo", effectiveVideoOutput)
-        mpvLib.setOptionString("ao", audioOutput)
+        mpvLib.setOptionString("ao", effectiveAudioOutput)
         mpvLib.setOptionString("gpu-context", "android")
         mpvLib.setOptionString("opengl-es", "yes")
         mpvLib.setOptionString("video-sync", "audio")
         mpvLib.setOptionString("interpolation", "no")
+        mpvLib.setOptionString("framedrop", "vo")
+        if (isLowEndProfile) {
+            mpvLib.setOptionString("scale", "bilinear")
+            mpvLib.setOptionString("cscale", "bilinear")
+            mpvLib.setOptionString("dither-depth", "no")
+            mpvLib.setOptionString("sigmoid-upscaling", "no")
+        }
         if (!isLowEndProfile && totalRamMb >= 4000L) {
             mpvLib.setOptionString("target-colorspace-hint", "yes")
         }
 
         // Hardware video decoding
-        mpvLib.setOptionString("hwdec", hwDec)
+        val effectiveHwDec = if (hwDec == "mediacodec") "mediacodec,mediacodec-copy" else hwDec
+        mpvLib.setOptionString("hwdec", effectiveHwDec)
         mpvLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
+        mpvLib.setOptionString("vd-lavc-fast", "yes")
 
         // TLS & Network resilience for IPTV / HLS / Real-Debrid VFS delays
         mpvLib.setOptionString("tls-verify", "no")
@@ -826,14 +852,19 @@ class MPVPlayer(
      * @param mediaItems The [MediaItems][MediaItem] to add.
      */
     override fun addMediaItems(index: Int, mediaItems: MutableList<MediaItem>) {
-        internalMediaItems.addAll(index, mediaItems)
+        val hadItems = internalMediaItems.isNotEmpty()
+        val insertIndex = index.coerceIn(0, internalMediaItems.size)
+        internalMediaItems.addAll(insertIndex, mediaItems)
+        if (hadItems && insertIndex <= currentMediaItemIndex) {
+            currentMediaItemIndex += mediaItems.size
+        }
         mediaItems.forEach { mediaItem ->
             mpvLib.command(
                 arrayOf(
                     "loadfile",
                     "${mediaItem.localConfiguration?.uri}",
                     "insert-at",
-                    index.toString(),
+                    insertIndex.toString(),
                 )
             )
         }
@@ -931,6 +962,21 @@ class MPVPlayer(
 
     /** Prepares the player. */
     override fun prepare() {
+        if (internalMediaItems.isEmpty()) return
+        if (!isSurfaceAttached) {
+            pendingPrepare = true
+            playbackState = STATE_BUFFERING
+            listeners.sendEvent(EVENT_PLAYBACK_STATE_CHANGED) { listener ->
+                listener.onPlaybackStateChanged(STATE_BUFFERING)
+            }
+            handler.removeCallbacks(pendingPrepareFallbackRunnable)
+            handler.postDelayed(pendingPrepareFallbackRunnable, 1500L)
+            return
+        }
+        executePrepare()
+    }
+
+    private fun executePrepare() {
         if (internalMediaItems.isEmpty()) return
         val safeInitialIndex = initialIndex.coerceIn(0, internalMediaItems.lastIndex)
         initialIndex = safeInitialIndex
@@ -1197,6 +1243,8 @@ class MPVPlayer(
      */
     override fun release() {
         isReleased = true
+        pendingPrepare = false
+        handler.removeCallbacks(pendingPrepareFallbackRunnable)
         if (handleAudioFocus) {
             AudioManagerCompat.abandonAudioFocusRequest(audioManager, audioFocusRequest)
         }
@@ -1512,6 +1560,12 @@ class MPVPlayer(
         attachedSurfaceView = surfaceView
         surfaceView?.holder?.addCallback(surfaceHolder)
         if (surfaceView != null && surfaceView.holder.surface?.isValid == true) {
+            if (surfaceView.width > 0 && surfaceView.height > 0) {
+                mpvLib.setPropertyString(
+                    "android-surface-size",
+                    "${surfaceView.width}x${surfaceView.height}",
+                )
+            }
             surfaceHolder.surfaceCreated(surfaceView.holder)
             if (surfaceView.width > 0 && surfaceView.height > 0) {
                 surfaceHolder.surfaceChanged(
@@ -1708,8 +1762,22 @@ class MPVPlayer(
              */
             override fun surfaceCreated(holder: SurfaceHolder) {
                 mpvLib.attachSurface(holder.surface)
+                attachedSurfaceView
+                    ?.takeIf { it.width > 0 && it.height > 0 }
+                    ?.let {
+                        mpvLib.setPropertyString("android-surface-size", "${it.width}x${it.height}")
+                    }
                 mpvLib.setOptionString("force-window", "yes")
-                mpvLib.setOptionString("vo", videoOutput)
+                mpvLib.setOptionString("vo", effectiveVideoOutput)
+                isSurfaceAttached = true
+                if (pendingPrepare) {
+                    pendingPrepare = false
+                    handler.removeCallbacks(pendingPrepareFallbackRunnable)
+                    executePrepare()
+                    if (currentPlayWhenReady) {
+                        mpvLib.setPropertyBoolean("pause", false)
+                    }
+                }
             }
 
             /**
@@ -1740,6 +1808,7 @@ class MPVPlayer(
              * @param holder The SurfaceHolder whose surface is being destroyed.
              */
             override fun surfaceDestroyed(holder: SurfaceHolder) {
+                isSurfaceAttached = false
                 mpvLib.setOptionString("vo", "null")
                 mpvLib.setOptionString("force-window", "no")
                 mpvLib.detachSurface()

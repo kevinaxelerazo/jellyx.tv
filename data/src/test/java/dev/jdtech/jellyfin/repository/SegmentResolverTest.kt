@@ -122,4 +122,29 @@ class SegmentResolverTest {
         assertEquals(1_350_000L, segments[1].startTicks)
         assertEquals(1_440_000L, segments[1].endTicks)
     }
+
+    @Test
+    fun parseIntroSkipperJson_flatClassicFormatValid_returnsIntroSegment() {
+        val resolver = SegmentResolver(jellyfinApi, database, httpClient)
+        val json =
+            """{"EpisodeId":"00000000-0000-0000-0000-000000000001","Valid":true,"IntroStart":12.5,"IntroEnd":98.0}"""
+
+        val segments = resolver.parseIntroSkipperJson(json)
+
+        assertEquals(1, segments.size)
+        assertEquals(JellyxSegmentType.INTRO, segments[0].type)
+        assertEquals(12_500L, segments[0].startTicks)
+        assertEquals(98_000L, segments[0].endTicks)
+    }
+
+    @Test
+    fun parseIntroSkipperJson_flatClassicFormatInvalidFlag_returnsEmptyList() {
+        val resolver = SegmentResolver(jellyfinApi, database, httpClient)
+        val json =
+            """{"EpisodeId":"00000000-0000-0000-0000-000000000001","Valid":false,"IntroStart":12.5,"IntroEnd":98.0}"""
+
+        val segments = resolver.parseIntroSkipperJson(json)
+
+        assertEquals(0, segments.size)
+    }
 }

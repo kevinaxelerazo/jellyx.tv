@@ -244,6 +244,17 @@ fun PlayerScreen(
         }
     }
 
+    val segment = uiState.currentSegment
+    val durationMs = activePlayer.duration
+    val remainingMs = if (durationMs > 0L) (durationMs - currentPosition).coerceAtLeast(0L) else 0L
+    val showFallbackNextEpisode =
+        segment == null &&
+            !uiState.isLiveTv &&
+            !uiState.playbackEnded &&
+            (activePlayer.hasNextMediaItem() || uiState.hasNextEpisode) &&
+            durationMs > 0L &&
+            remainingMs in 1L..30_000L
+
     LaunchedEffect(
         videoPlayerState.controlsVisible,
         activeTrackSelectorType,
@@ -251,6 +262,7 @@ fun PlayerScreen(
         showLiveChannelDrawer,
         showEpisodesDrawer,
         uiState.currentSegment,
+        showFallbackNextEpisode,
         uiState.playbackEnded,
     ) {
         if (showLiveChannelDrawer || showEpisodesDrawer) {
@@ -266,7 +278,8 @@ fun PlayerScreen(
                 activeTrackSelectorType == null &&
                 !showSyncPlayDialog &&
                 !uiState.playbackEnded &&
-                uiState.currentSegment == null
+                uiState.currentSegment == null &&
+                !showFallbackNextEpisode
         ) {
             runCatching { playerBoxFocusRequester.requestFocus() }
             delay(350L)
@@ -703,20 +716,12 @@ fun PlayerScreen(
         }
 
         // Media Segments (Skip Intro / Skip Outro / Next Episode) + fallback Next Episode near end
-        val segment = uiState.currentSegment
-        val durationMs = activePlayer.duration
-        val remainingMs = if (durationMs > 0L) (durationMs - currentPosition).coerceAtLeast(0L) else 0L
-        val showFallbackNextEpisode =
-            segment == null &&
-                activePlayer.hasNextMediaItem() &&
-                durationMs > 0L &&
-                remainingMs in 1L..30_000L
-
-        if ((segment != null || showFallbackNextEpisode) &&
-                !videoPlayerState.controlsVisible &&
+        if (
+            (segment != null || showFallbackNextEpisode) &&
                 activeTrackSelectorType == null &&
                 !showLiveChannelDrawer &&
-                !showEpisodesDrawer
+                !showEpisodesDrawer &&
+                !uiState.playbackEnded
         ) {
             val skipButtonFocusRequester = remember { FocusRequester() }
             val isNextEpisode =
@@ -736,18 +741,26 @@ fun PlayerScreen(
                     uiState.currentSkipButtonStringRes
                 }
 
-            SkipButton(
-                stringRes = skipLabelRes,
-                countdownSeconds = remainingSeconds,
-                onClick = {
-                    if (segment != null) {
-                        viewModel.skipSegment(segment)
-                    } else {
-                        activePlayer.seekToNextMediaItem()
-                    }
-                },
-                skipButtonFocusRequester = skipButtonFocusRequester,
-            )
+            Box(
+                modifier =
+                    Modifier.fillMaxSize()
+                        .padding(
+                            bottom = if (videoPlayerState.controlsVisible) 136.dp else 0.dp
+                        )
+            ) {
+                SkipButton(
+                    stringRes = skipLabelRes,
+                    countdownSeconds = remainingSeconds,
+                    onClick = {
+                        if (segment != null) {
+                            viewModel.skipSegment(segment)
+                        } else {
+                            activePlayer.seekToNextMediaItem()
+                        }
+                    },
+                    skipButtonFocusRequester = skipButtonFocusRequester,
+                )
+            }
 
             LaunchedEffect(segment, showFallbackNextEpisode, videoPlayerState.controlsVisible) {
                 if (!videoPlayerState.controlsVisible && activeTrackSelectorType == null) {

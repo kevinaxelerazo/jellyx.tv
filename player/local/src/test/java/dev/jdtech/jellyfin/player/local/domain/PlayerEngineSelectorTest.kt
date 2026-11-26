@@ -168,4 +168,68 @@ class PlayerEngineSelectorTest {
             ),
         )
     }
+
+    @Test
+    fun `v0_1_8 defaults select libmpv directly for Live TV and ASS SSA and ExoPlayer for standard VOD`() {
+        assertEquals(
+            PlayerEngineDecision.MPV_LIVE_TV,
+            PlayerEngineSelector.selectEngine(
+                configuredBackend = "exoplayer",
+                smartMpvForLiveTv = true,
+                smartMpvForAssSubtitles = true,
+                isLiveTv = true,
+                hasAssSubtitles = false,
+            ),
+        )
+        assertEquals(
+            PlayerEngineDecision.MPV_ASS_SUBTITLES,
+            PlayerEngineSelector.selectEngine(
+                configuredBackend = "exoplayer",
+                smartMpvForLiveTv = true,
+                smartMpvForAssSubtitles = true,
+                isLiveTv = false,
+                hasAssSubtitles = true,
+            ),
+        )
+        assertEquals(
+            PlayerEngineDecision.MPV_LIVE_TV,
+            PlayerEngineSelector.selectEngine(
+                configuredBackend = "exoplayer",
+                smartMpvForLiveTv = true,
+                smartMpvForAssSubtitles = true,
+                isLiveTv = true,
+                hasAssSubtitles = true,
+            ),
+        )
+        assertEquals(
+            PlayerEngineDecision.EXOPLAYER,
+            PlayerEngineSelector.selectEngine(
+                configuredBackend = "exoplayer",
+                smartMpvForLiveTv = true,
+                smartMpvForAssSubtitles = true,
+                isLiveTv = false,
+                hasAssSubtitles = false,
+            ),
+        )
+        assertEquals(
+            PlayerEngineDecision.EXOPLAYER,
+            PlayerEngineSelector.selectEngine(
+                configuredBackend = "exoplayer",
+                smartMpvForLiveTv = false,
+                smartMpvForAssSubtitles = false,
+                isLiveTv = true,
+                hasAssSubtitles = false,
+            ),
+        )
+        assertEquals(
+            PlayerEngineDecision.EXOPLAYER,
+            PlayerEngineSelector.selectEngine(
+                configuredBackend = "exoplayer",
+                smartMpvForLiveTv = false,
+                smartMpvForAssSubtitles = false,
+                isLiveTv = false,
+                hasAssSubtitles = true,
+            ),
+        )
+    }
 }
