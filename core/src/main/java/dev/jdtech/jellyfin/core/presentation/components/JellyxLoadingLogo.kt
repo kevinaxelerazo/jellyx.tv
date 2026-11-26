@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -16,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
@@ -46,13 +48,20 @@ fun JellyxLoadingLogo(
             label = "jellyx_loading_rotation",
         )
 
+    val iconSize = size * 0.90f
+    val opticalOffsetY = -(iconSize * 0.12f)
+
     Box(modifier = modifier.size(size), contentAlignment = Alignment.Center) {
         Image(
             painter = painterResource(id = CoreR.drawable.ic_logo),
             contentDescription = "Cargando",
             modifier =
-                Modifier.size(size * 0.90f)
-                    .graphicsLayer { rotationZ = rotation }
+                Modifier.size(iconSize)
+                    .offset(y = opticalOffsetY)
+                    .graphicsLayer {
+                        transformOrigin = TransformOrigin(0.5f, 0.62f)
+                        rotationZ = rotation
+                    }
                     .alpha(alpha),
         )
     }

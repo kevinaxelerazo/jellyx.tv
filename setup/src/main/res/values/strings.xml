@@ -21,10 +21,10 @@
    <string name="servers_btn_add_server">Add server</string>
    <string name="remove_server_dialog">Remove server</string>
    <string name="remove_server_dialog_text">Are you sure you want to remove the server %s?</string>
-   <string name="welcome">Welcome to JellyX</string>
+   <string name="welcome">Welcome to Jellyx.tv</string>
    <string name="welcome_btn_continue">Continue</string>
    <string name="welcome_btn_learn_more">Learn more about Jellyfin</string>
-   <string name="welcome_text">JellyX is a third-party client for Jellyfin. JellyX by itself does not contain any media.\n\nIn order to use this client, you need to host your own Jellyfin server.</string>
+   <string name="welcome_text">Your private movies, shows, and Live TV platform, automatically optimized for every screen.\n\nSign in with your account or Quick Connect code to get started.</string>
    <string name="permission_btn_grant">Grant</string>
    <string name="permission_btn_not_now">Not now</string>
    <string name="permission_btn_open_settings">Open settings</string>

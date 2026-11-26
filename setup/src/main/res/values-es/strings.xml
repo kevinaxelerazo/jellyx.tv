@@ -31,10 +31,10 @@
     <string name="remove_server_address_dialog_text">¿Está seguro de querer eliminar el servidor con dirección %1$s</string>
     <string name="servers">Sevidores</string>
     <string name="servers_btn_add_server">Añadir servidor</string>
-    <string name="welcome">Bienvenido a JellyX</string>
+    <string name="welcome">Bienvenido a Jellyx.tv</string>
     <string name="welcome_btn_continue">Continuar</string>
     <string name="welcome_btn_learn_more">Aprende más sobre Jellyfin</string>
-    <string name="welcome_text">JellyX es un cliente de terceros para Jellyfin. JellyX por si solo no contiene ningún medio.\n\nPara usar este cliente, necesitas hospedar tu propio servidor de Jellyfin.</string>
+    <string name="welcome_text">Tu plataforma privada de películas, series y TV en vivo, optimizada automáticamente para cada pantalla.\n\nInicia sesión con tu cuenta o código Quick Connect para empezar.</string>
     <string name="confirm">Confirmar</string>
     <string name="cancel">Cancelar</string>
     <string name="or">O</string>
