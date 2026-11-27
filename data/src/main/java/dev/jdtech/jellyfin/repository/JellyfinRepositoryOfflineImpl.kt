@@ -382,6 +382,8 @@ class JellyfinRepositoryOfflineImpl(
 
     override suspend fun getLiveTvChannels(): List<JellyxChannel> = emptyList()
 
+    override suspend fun getLiveTvChannelsPreview(limit: Int): List<JellyxChannel> = emptyList()
+
     override suspend fun getLiveTvChannel(channelId: UUID): JellyxChannel {
         throw UnsupportedOperationException("Live TV is not available offline")
     }

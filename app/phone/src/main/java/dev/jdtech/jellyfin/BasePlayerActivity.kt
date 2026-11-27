@@ -8,6 +8,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.updatePadding
+import androidx.lifecycle.Lifecycle
+import androidx.media3.common.Player
 import androidx.media3.session.MediaSession
 import dev.jdtech.jellyfin.player.local.presentation.PlayerViewModel
 
@@ -15,7 +17,8 @@ abstract class BasePlayerActivity : AppCompatActivity() {
 
     abstract val viewModel: PlayerViewModel
 
-    private lateinit var mediaSession: MediaSession
+    private var mediaSession: MediaSession? = null
+    private var isActivityStarted: Boolean = false
     private var wasPip: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,8 +28,17 @@ abstract class BasePlayerActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        isActivityStarted = true
+        updateMediaSessionPlayer(viewModel.player)
+    }
 
-        mediaSession = MediaSession.Builder(this, viewModel.player).build()
+    protected fun updateMediaSessionPlayer(player: Player) {
+        runCatching { mediaSession?.release() }
+        mediaSession = null
+        if (isDestroyed || (!isActivityStarted && !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))) {
+            return
+        }
+        mediaSession = MediaSession.Builder(this, player).build()
     }
 
     override fun onResume() {
@@ -53,9 +65,11 @@ abstract class BasePlayerActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        isActivityStarted = false
         super.onStop()
 
-        mediaSession.release()
+        runCatching { mediaSession?.release() }
+        mediaSession = null
 
         if (wasPip) {
             finish()

@@ -1,6 +1,10 @@
 package dev.jdtech.jellyfin.player.local.cache
 
+import android.app.ActivityManager
+import android.app.UiModeManager
 import android.content.Context
+import android.content.res.Configuration
+import androidx.media3.datasource.DataSource
 import dev.jdtech.jellyfin.cache.MediaCacheEvictionBus
 import io.mockk.every
 import io.mockk.mockk
@@ -8,6 +12,7 @@ import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -67,5 +72,59 @@ class JellyxCacheManagerTest {
             assertFalse(mpvTemp.exists())
             assertTrue(offlineDownload.exists())
         }
+
+    @Test
+    fun `prepareForPlayback preserves mpv cache when clearMpvCache is false`() = runTest {
+        val itemA = UUID.randomUUID()
+        val itemB = UUID.randomUUID()
+
+        val manager = JellyxCacheManager(context, MediaCacheEvictionBus())
+        manager.prepareForPlayback(itemA)
+
+        val cachedChunk = File(cacheDir, "jellyx_session_cache_v1/chunk.exo").apply {
+            parentFile?.mkdirs()
+            writeText("cached-blocks")
+        }
+        val mpvTemp = File(cacheDir, "mpv/shader.bin").apply {
+            parentFile?.mkdirs()
+            writeText("mpv-cache")
+        }
+
+        manager.prepareForPlayback(itemB, clearMpvCache = false)
+        assertFalse(cachedChunk.exists())
+        assertTrue(mpvTemp.exists())
+    }
+
+    @Test
+    fun `buildCacheDataSourceFactory bypasses disk cache on low-RAM TV and falls back safely`() {
+        val uiModeManager = mockk<UiModeManager>(relaxed = true) {
+            every { currentModeType } returns Configuration.UI_MODE_TYPE_TELEVISION
+        }
+        val activityManager = mockk<ActivityManager>(relaxed = true) {
+            every { isLowRamDevice } returns true
+        }
+        every { context.getSystemService(Context.UI_MODE_SERVICE) } returns uiModeManager
+        every { context.getSystemService(Context.ACTIVITY_SERVICE) } returns activityManager
+
+        val directSource = mockk<DataSource>(relaxed = true)
+        val upstreamFactory = DataSource.Factory { directSource }
+
+        val lowRamTvManager = JellyxCacheManager(context, MediaCacheEvictionBus())
+        assertFalse(lowRamTvManager.shouldUseDiskCache())
+
+        val factory = lowRamTvManager.buildCacheDataSourceFactory(upstreamFactory)
+        assertSame(directSource, factory.createDataSource())
+    }
+
+    @Test
+    fun `buildCacheDataSourceFactory falls back safely when SimpleCache initialization fails`() {
+        val directSource = mockk<DataSource>(relaxed = true)
+        val upstreamFactory = DataSource.Factory { directSource }
+
+        val manager = JellyxCacheManager(context, MediaCacheEvictionBus())
+        manager.simpleCacheFactory = { throw IllegalStateException("Simulated SimpleCache failure") }
+        val factory = manager.buildCacheDataSourceFactory(upstreamFactory)
+        assertSame(directSource, factory.createDataSource())
+    }
 }
 

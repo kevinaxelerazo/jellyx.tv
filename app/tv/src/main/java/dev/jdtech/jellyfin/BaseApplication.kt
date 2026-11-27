@@ -9,6 +9,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.annotation.ExperimentalCoilApi
 import coil3.disk.DiskCache
+import coil3.memory.MemoryCache
 import coil3.network.cachecontrol.CacheControlCacheStrategy
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.CachePolicy
@@ -20,6 +21,7 @@ import dev.jdtech.jellyfin.work.UpdateCheckWorker
 import javax.inject.Inject
 import kotlin.time.ExperimentalTime
 import okio.Path.Companion.toOkioPath
+import timber.log.Timber
 
 @HiltAndroidApp
 class BaseApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
@@ -31,7 +33,12 @@ class BaseApplication : Application(), Configuration.Provider, SingletonImageLoa
 
     override fun onCreate() {
         super.onCreate()
-        UpdateCheckWorker.schedulePeriodicCheck(WorkManager.getInstance(applicationContext))
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
+        runCatching {
+            UpdateCheckWorker.schedulePeriodicCheck(WorkManager.getInstance(applicationContext))
+        }
     }
 
     @OptIn(ExperimentalCoilApi::class, ExperimentalTime::class)
@@ -41,19 +48,41 @@ class BaseApplication : Application(), Configuration.Provider, SingletonImageLoa
                 add(OkHttpNetworkFetcherFactory(cacheStrategy = { CacheControlCacheStrategy() }))
                 add(SvgDecoder.Factory())
             }
+            .memoryCache {
+                MemoryCache.Builder()
+                    .maxSizePercent(context, 0.15)
+                    .build()
+            }
             .diskCachePolicy(
                 if (appPreferences.getValue(appPreferences.imageCache)) CachePolicy.ENABLED
                 else CachePolicy.DISABLED
             )
             .diskCache {
-                DiskCache.Builder()
-                    .directory(context.cacheDir.resolve("image_cache").toOkioPath())
-                    .maxSizeBytes(
-                        appPreferences.getValue(appPreferences.imageCacheSize) * 1024L * 1024
-                    )
-                    .build()
+                runCatching {
+                        DiskCache.Builder()
+                            .directory(context.cacheDir.resolve("image_cache").toOkioPath())
+                            .maxSizeBytes(
+                                appPreferences
+                                    .getValue(appPreferences.imageCacheSize)
+                                    .coerceIn(10, 64) * 1024L * 1024L
+                            )
+                            .build()
+                    }
+                    .getOrNull()
             }
-            .crossfade(true)
+            .crossfade(false)
             .build()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_RUNNING_LOW) {
+            runCatching { SingletonImageLoader.get(this).memoryCache?.clear() }
+        }
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        runCatching { SingletonImageLoader.get(this).memoryCache?.clear() }
     }
 }

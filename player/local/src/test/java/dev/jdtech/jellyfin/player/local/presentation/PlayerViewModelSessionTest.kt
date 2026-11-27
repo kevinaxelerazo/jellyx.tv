@@ -13,6 +13,7 @@ import dev.jdtech.jellyfin.models.JellyxSegment
 import dev.jdtech.jellyfin.models.JellyxSegmentType
 import dev.jdtech.jellyfin.player.core.domain.models.PlayerItem
 import dev.jdtech.jellyfin.player.local.R
+import dev.jdtech.jellyfin.player.local.cache.JellyxCacheManager
 import dev.jdtech.jellyfin.player.local.domain.DeviceCapabilityInspector
 import dev.jdtech.jellyfin.player.local.domain.PlaylistManager
 import dev.jdtech.jellyfin.repository.JellyfinRepository
@@ -52,6 +53,7 @@ class PlayerViewModelSessionTest {
     private lateinit var mockPlayer: Player
     private lateinit var playlistManager: PlaylistManager
     private lateinit var repository: JellyfinRepository
+    private lateinit var sharedPreferences: SharedPreferences
     private lateinit var appPreferences: AppPreferences
     private lateinit var capabilityInspector: DeviceCapabilityInspector
     private lateinit var sessionEventManager: SessionEventManager
@@ -68,19 +70,30 @@ class PlayerViewModelSessionTest {
         val app = mockk<Application>(relaxed = true)
         playlistManager = mockk(relaxed = true)
         repository = mockk(relaxed = true)
-        appPreferences = mockk(relaxed = true)
-        every { appPreferences.getValue(appPreferences.playerMediaSegmentsSkipButton) } returns
-            false
-        every { appPreferences.getValue(appPreferences.playerMediaSegmentsSkipButtonType) } returns
-            emptySet()
-        every {
-            appPreferences.getValue(appPreferences.playerMediaSegmentsSkipButtonDuration)
-        } returns 0L
-        every { appPreferences.getValue(appPreferences.playerMediaSegmentsAutoSkip) } returns false
-        every { appPreferences.getValue(appPreferences.playerMediaSegmentsAutoSkipType) } returns
-            emptySet()
-        every { appPreferences.getValue(appPreferences.playerMediaSegmentsAutoSkipMode) } returns
-            "always"
+        sharedPreferences =
+            mockk(relaxed = true) {
+                every { getBoolean("pref_player_media_segments_skip_button", true) } returns false
+                every {
+                    getStringSet(
+                        "pref_player_media_segments_skip_button_type",
+                        setOf("INTRO", "OUTRO"),
+                    )
+                } returns emptySet()
+                every { getLong("pref_player_media_segments_skip_button_duration", 5L) } returns 0L
+                every { getBoolean("pref_player_media_segments_auto_skip", false) } returns false
+                every {
+                    getStringSet(
+                        "pref_player_media_segments_auto_skip_type",
+                        setOf("INTRO", "OUTRO"),
+                    )
+                } returns emptySet()
+                every { getString("pref_player_media_segments_auto_skip_mode", "always") } returns
+                    "always"
+                every { getString("pref_player_backend", "exoplayer") } returns "exoplayer"
+                every { getBoolean("pref_player_smart_mpv_live_tv", true) } returns true
+                every { getBoolean("pref_player_smart_mpv_ass_subs", true) } returns true
+            }
+        appPreferences = AppPreferences(sharedPreferences)
         capabilityInspector = mockk(relaxed = true)
         sessionEventManager = mockk(relaxed = true)
         every { sessionEventManager.events } returns eventsFlow
@@ -92,6 +105,7 @@ class PlayerViewModelSessionTest {
     private fun createViewModel(
         app: Application = mockk(relaxed = true),
         prefs: AppPreferences = appPreferences,
+        cacheManager: JellyxCacheManager? = null,
     ): PlayerViewModel {
         return PlayerViewModel(
             application = app,
@@ -102,6 +116,7 @@ class PlayerViewModelSessionTest {
             sessionEventManager = sessionEventManager,
             savedStateHandle = SavedStateHandle(),
             testPlayer = mockPlayer,
+            cacheManager = cacheManager,
         )
     }
 
@@ -397,5 +412,86 @@ class PlayerViewModelSessionTest {
             assertFalse(segmentVm.uiState.value.hasNextEpisode)
 
             ep2Deferred.complete(emptyList())
+        }
+
+    @Test
+    fun `selectSpeed and applyTemporarySpeed update player speed while preserving persistent speed`() {
+        viewModel.selectSpeed(1.5f)
+        assertEquals(1.5f, viewModel.playbackSpeed)
+        verify { mockPlayer.setPlaybackSpeed(1.5f) }
+
+        viewModel.applyTemporarySpeed(2.0f)
+        assertEquals(1.5f, viewModel.playbackSpeed)
+        verify { mockPlayer.setPlaybackSpeed(2.0f) }
+    }
+
+    @Test
+    fun `updatePictureInPictureMode updates PiP state`() {
+        assertFalse(viewModel.isInPictureInPictureMode)
+        viewModel.updatePictureInPictureMode(true)
+        assertTrue(viewModel.isInPictureInPictureMode)
+        viewModel.updatePictureInPictureMode(false)
+        assertFalse(viewModel.isInPictureInPictureMode)
+    }
+
+    @Test
+    fun `initializePlayer prepares cache once with clearMpvCache matching engine decision`() =
+        runTest {
+            val cacheManager = mockk<JellyxCacheManager>(relaxed = true)
+            val vm = createViewModel(cacheManager = cacheManager)
+
+            val exoMovieId = UUID.randomUUID()
+            val exoMovie =
+                PlayerItem(
+                    name = "Movie 1",
+                    itemId = exoMovieId,
+                    mediaSourceId = "src-1",
+                    playbackPosition = 0L,
+                    mediaSourceUri = "https://jellyx.test/movie1.mkv",
+                    hasAssSubtitles = false,
+                )
+            coEvery {
+                playlistManager.getInitialItem(
+                    itemId = exoMovieId,
+                    itemKind = BaseItemKind.MOVIE,
+                    mediaSourceIndex = null,
+                    startFromBeginning = false,
+                )
+            } returns exoMovie
+            every { sharedPreferences.getString("pref_player_backend", "exoplayer") } returns
+                "exoplayer"
+            every { sharedPreferences.getBoolean("pref_player_smart_mpv_ass_subs", true) } returns
+                true
+
+            vm.initializePlayer(exoMovieId, BaseItemKind.MOVIE.serialName, false)
+
+            coVerify(exactly = 1) {
+                cacheManager.prepareForPlayback(itemId = exoMovieId, clearMpvCache = true)
+            }
+
+            val assAnimeId = UUID.randomUUID()
+            val assAnime =
+                PlayerItem(
+                    name = "Anime Ep 1",
+                    itemId = assAnimeId,
+                    mediaSourceId = "src-2",
+                    playbackPosition = 0L,
+                    mediaSourceUri = "https://jellyx.test/anime1.mkv",
+                    hasAssSubtitles = true,
+                )
+            coEvery {
+                playlistManager.getInitialItem(
+                    itemId = assAnimeId,
+                    itemKind = BaseItemKind.EPISODE,
+                    mediaSourceIndex = null,
+                    startFromBeginning = false,
+                )
+            } returns assAnime
+
+            vm.initializePlayer(assAnimeId, BaseItemKind.EPISODE.serialName, false)
+
+            coVerify(exactly = 1) {
+                cacheManager.prepareForPlayback(itemId = assAnimeId, clearMpvCache = false)
+            }
         }
 }

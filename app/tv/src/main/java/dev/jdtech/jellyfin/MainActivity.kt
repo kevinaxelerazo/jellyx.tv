@@ -136,7 +136,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         lifecycleScope.launch(Dispatchers.IO) {
-            appUpdateManager.checkForUpdates(force = false)
+            runCatching { appUpdateManager.checkForUpdates(force = false) }
         }
     }
 

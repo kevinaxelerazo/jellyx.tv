@@ -6,11 +6,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.jdtech.jellyfin.models.JellyxEpisode
 import dev.jdtech.jellyfin.models.JellyxItem
 import dev.jdtech.jellyfin.models.JellyxMovie
+import dev.jdtech.jellyfin.models.JellyxRatings
 import dev.jdtech.jellyfin.models.JellyxShow
 import dev.jdtech.jellyfin.models.StreamingPlatformCatalog
 import dev.jdtech.jellyfin.models.toNativeRatings
 import dev.jdtech.jellyfin.repository.JellyfinRepository
 import dev.jdtech.jellyfin.repository.RatingsRepository
+import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -19,7 +21,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import timber.log.Timber
 
@@ -120,7 +124,28 @@ constructor(
     }
 
     private suspend fun enrichRatingsAsync(items: List<JellyxItem>) {
-        val semaphore = Semaphore(4)
+        val semaphore = Semaphore(3)
+        val bufferMutex = Mutex()
+        val pendingUpdates = mutableMapOf<UUID, JellyxRatings>()
+
+        fun flushUpdates(batch: Map<UUID, JellyxRatings>) {
+            if (batch.isEmpty()) return
+            _state.update { current ->
+                var changed = false
+                for ((id, ratings) in batch) {
+                    if (current.ratingsByItemId[id] != ratings) {
+                        changed = true
+                        break
+                    }
+                }
+                if (!changed) {
+                    current
+                } else {
+                    current.copy(ratingsByItemId = current.ratingsByItemId + batch)
+                }
+            }
+        }
+
         coroutineScope {
             items.take(60).forEach { item ->
                 launch {
@@ -143,19 +168,33 @@ constructor(
                                     )
                                 }
                                 .getOrNull() ?: return@withPermit
-                        _state.update { current ->
-                            if (current.ratingsByItemId[item.id] == enriched) {
-                                current
-                            } else {
-                                current.copy(
-                                    ratingsByItemId = current.ratingsByItemId + (item.id to enriched)
-                                )
+
+                        val batchToFlush =
+                            bufferMutex.withLock {
+                                pendingUpdates[item.id] = enriched
+                                if (pendingUpdates.size >= RATINGS_BATCH_SIZE) {
+                                    pendingUpdates.toMap().also { pendingUpdates.clear() }
+                                } else {
+                                    null
+                                }
                             }
+                        if (batchToFlush != null) {
+                            flushUpdates(batchToFlush)
                         }
                     }
                 }
             }
         }
+
+        val remaining =
+            bufferMutex.withLock {
+                pendingUpdates.toMap().also { pendingUpdates.clear() }
+            }
+        flushUpdates(remaining)
+    }
+
+    companion object {
+        private const val RATINGS_BATCH_SIZE = 4
     }
 
     fun onAction(action: SearchAction) {

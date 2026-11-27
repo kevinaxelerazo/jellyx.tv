@@ -17,11 +17,15 @@ import timber.log.Timber
 class PreviewScrubListener(
     private val scrubbingPreview: ImageView,
     private val timeBarView: View,
-    private val player: Player,
+    private var player: Player,
 ) : TimeBar.OnScrubListener {
     var currentTrickplay: Trickplay? = null
     private val roundedCorners = RoundedCornersTransformation(10f)
     private var currentBitMap: Bitmap? = null
+
+    fun updatePlayer(newPlayer: Player) {
+        player = newPlayer
+    }
 
     override fun onScrubStart(timeBar: TimeBar, position: Long) {
         Timber.d("Scrubbing started at $position")
@@ -39,11 +43,13 @@ class PreviewScrubListener(
 
         try {
             val trickplay = currentTrickplay ?: return
+            val duration = player.duration
+            if (duration <= 0L) return
             val image = trickplay.images[position.div(trickplay.interval).toInt()]
 
             val parent = scrubbingPreview.parent as ViewGroup
 
-            val offset = position.toFloat() / player.duration
+            val offset = position.toFloat() / duration
             val minX = scrubbingPreview.left
             val maxX = parent.width - parent.paddingRight
 

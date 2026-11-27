@@ -143,7 +143,7 @@ class PlayerGestureHelper(
         playerView.player?.let {
             if (it.isPlaying) {
                 lastPlaybackSpeed = it.playbackParameters.speed
-                it.setPlaybackSpeed(playbackSpeedIncrease)
+                activity.viewModel.applyTemporarySpeed(playbackSpeedIncrease)
                 activity.binding.gestureSpeedText.text = playbackSpeedIncrease.toString() + "x"
                 activity.binding.gestureSpeedLayout.visibility = View.VISIBLE
             }
@@ -499,10 +499,10 @@ class PlayerGestureHelper(
             currentNumberOfPointers = 0
         }
         if (
-            lastPlaybackSpeed > 0 &&
+            lastPlaybackSpeed > 0f &&
                 (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL)
         ) {
-            playerView.player?.setPlaybackSpeed(lastPlaybackSpeed)
+            activity.viewModel.applyTemporarySpeed(lastPlaybackSpeed)
             lastPlaybackSpeed = 0f
             activity.binding.gestureSpeedLayout.visibility = View.GONE
         }

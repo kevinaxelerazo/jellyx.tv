@@ -28,6 +28,7 @@ import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
@@ -50,6 +51,8 @@ constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow(HomeState())
     val state = _state.asStateFlow()
+
+    private var loadJob: Job? = null
 
     private val uuidSuggestions = UUID.fromString("31e47044-9b79-4bb0-99d0-0e477ed65420")
     private val uuidContinueWatching =
@@ -74,7 +77,9 @@ constructor(
 
     fun loadData() {
         Timber.i("Loading data")
-        viewModelScope.launch(Dispatchers.Default) {
+        loadJob?.cancel()
+        loadJob =
+            viewModelScope.launch(Dispatchers.Default) {
             _state.update { it.copy(isLoading = true, error = null) }
             runCatching { downloader.reconcileCompletedDownloads() }
 
@@ -230,7 +235,7 @@ constructor(
                     val collectionType = CollectionType.fromString(view.collectionType?.serialName)
                     val latest =
                         if (collectionType == CollectionType.LiveTv) {
-                            repository.getLiveTvChannels().take(16)
+                            repository.getLiveTvChannelsPreview(limit = 16)
                         } else {
                             repository.getLatestReleases(view.id, collectionType)
                         }

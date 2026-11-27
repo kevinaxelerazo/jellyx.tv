@@ -188,6 +188,7 @@ internal constructor(
     private var segmentsAutoSkipMode: String = "always"
 
     var playbackSpeed: Float = 1f
+    private var activePlaybackSpeed: Float = 1f
 
     var isInPictureInPictureMode: Boolean = false
 
@@ -254,6 +255,7 @@ internal constructor(
         val renderersFactory =
             DefaultRenderersFactory(application)
                 .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+                .setEnableDecoderFallback(true)
         val httpDataSourceFactory =
             DefaultHttpDataSource.Factory()
                 .setUserAgent("VLC/3.0.20 LibVLC/3.0.20")
@@ -267,12 +269,27 @@ internal constructor(
                 DefaultMediaSourceFactory(it.buildCacheDataSourceFactory(upstreamFactory))
             } ?: DefaultMediaSourceFactory(upstreamFactory)
         val capabilities = capabilityInspector.inspect()
-        val maxBufferMs = if (capabilities.isLowRamDevice) 60_000 else 120_000
-        val loadControl =
-            androidx.media3.exoplayer.DefaultLoadControl.Builder()
-                .setBufferDurationsMs(35_000, maxBufferMs, 3_500, 6_000)
-                .setBackBuffer(30_000, true)
-                .build()
+        val loadControlBuilder = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+        when {
+            capabilities.isLowRamDevice || (capabilities.totalRamMb in 1L..2500L) -> {
+                loadControlBuilder
+                    .setBufferDurationsMs(25_000, 50_000, 2_500, 5_000)
+                    .setBackBuffer(10_000, false)
+                    .setTargetBufferBytes(64 * 1024 * 1024)
+            }
+            capabilities.totalRamMb in 2501L..3500L -> {
+                loadControlBuilder
+                    .setBufferDurationsMs(30_000, 60_000, 3_000, 6_000)
+                    .setBackBuffer(20_000, false)
+                    .setTargetBufferBytes(96 * 1024 * 1024)
+            }
+            else -> {
+                loadControlBuilder
+                    .setBufferDurationsMs(35_000, 120_000, 3_500, 6_000)
+                    .setBackBuffer(30_000, true)
+            }
+        }
+        val loadControl = loadControlBuilder.build()
         return ExoPlayer.Builder(application, renderersFactory)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(mediaSourceFactory)
@@ -333,16 +350,28 @@ internal constructor(
             .build()
     }
 
-    private fun applyDirectEngineSelection(startItem: PlayerItem) {
+    private fun selectEngineDecision(startItem: PlayerItem): PlayerEngineDecision {
+        return PlayerEngineSelector.selectEngine(
+            configuredBackend = appPreferences.getValue(appPreferences.playerBackend),
+            smartMpvForLiveTv = appPreferences.getValue(appPreferences.playerSmartMpvLiveTv),
+            smartMpvForAssSubtitles = appPreferences.getValue(appPreferences.playerSmartMpvAssSubs),
+            isLiveTv = startItem.isLiveTv,
+            hasAssSubtitles = startItem.hasAssSubtitles,
+        )
+    }
+
+    private fun applyDirectEngineSelection(
+        startItem: PlayerItem,
+        decision: PlayerEngineDecision = selectEngineDecision(startItem),
+    ) {
         if (isUsingTestPlayer) return
-        val decision =
-            PlayerEngineSelector.selectEngine(
-                configuredBackend = appPreferences.getValue(appPreferences.playerBackend),
-                smartMpvForLiveTv = appPreferences.getValue(appPreferences.playerSmartMpvLiveTv),
-                smartMpvForAssSubtitles = appPreferences.getValue(appPreferences.playerSmartMpvAssSubs),
-                isLiveTv = startItem.isLiveTv,
-                hasAssSubtitles = startItem.hasAssSubtitles,
-            )
+        if (startItem.isLiveTv) {
+            playbackSpeed = 1f
+            activePlaybackSpeed = 1f
+        } else {
+            activePlaybackSpeed = playbackSpeed
+        }
+        var switchedPlayer = false
         if (
             decision == PlayerEngineDecision.MPV_LIVE_TV ||
                 decision == PlayerEngineDecision.MPV_ASS_SUBTITLES
@@ -361,7 +390,7 @@ internal constructor(
                 player = buildMpvPlayer(isLiveTvMode = desiredLiveTvMode)
                 appliedSessionTrackKey = null
                 player.addListener(this)
-                eventsChannel.trySend(PlayerEvents.PlayerSwitched(player))
+                switchedPlayer = true
             }
         } else if (decision == PlayerEngineDecision.EXOPLAYER) {
             if (player is MPVPlayer && !hasFailedOverToMpv && mpvDirectReason != null) {
@@ -375,10 +404,19 @@ internal constructor(
                 mpvFallbackReason = null
                 appliedSessionTrackKey = null
                 player.addListener(this)
-                eventsChannel.trySend(PlayerEvents.PlayerSwitched(player))
+                switchedPlayer = true
             } else if (player is ExoPlayer) {
                 mpvDirectReason = null
             }
+        }
+        syncExoTunnelingForSpeedAndPip(activePlaybackSpeed, isInPictureInPictureMode)
+        if (activePlaybackSpeed != 1f) {
+            player.setPlaybackSpeed(activePlaybackSpeed)
+        } else if (startItem.isLiveTv && player.playbackParameters.speed != 1f) {
+            player.setPlaybackSpeed(1f)
+        }
+        if (switchedPlayer) {
+            eventsChannel.trySend(PlayerEvents.PlayerSwitched(player))
         }
     }
 
@@ -480,7 +518,12 @@ internal constructor(
 
             items = mutableListOf(startItem)
             currentMediaItemIndex = 0
-            applyDirectEngineSelection(startItem)
+            val decision = selectEngineDecision(startItem)
+            cacheManager?.prepareForPlayback(
+                itemId = if (startItem.isLiveTv) null else startItem.itemId,
+                clearMpvCache = decision == PlayerEngineDecision.EXOPLAYER,
+            )
+            applyDirectEngineSelection(startItem, decision)
 
             val mediaItems = mutableListOf<MediaItem>()
             try {
@@ -498,8 +541,6 @@ internal constructor(
                     playbackPosition
                 }
             playbackPosition = 0L
-
-            cacheManager?.prepareForPlayback(if (startItem.isLiveTv) null else startItem.itemId)
 
             player.setMediaItems(mediaItems, 0, startPosition)
             player.prepare()
@@ -580,6 +621,16 @@ internal constructor(
         appliedSessionTrackKey = null
         neighborsLoadedForItemId = null
         player.addListener(this)
+
+        if (targetItem?.isLiveTv == true) {
+            playbackSpeed = 1f
+            activePlaybackSpeed = 1f
+        } else {
+            activePlaybackSpeed = playbackSpeed
+            if (activePlaybackSpeed != 1f) {
+                mpvPlayer.setPlaybackSpeed(activePlaybackSpeed)
+            }
+        }
 
         if (targetItem != null) {
             items = mutableListOf(targetItem)
@@ -738,6 +789,9 @@ internal constructor(
     }
 
     fun updateCurrentSegment() {
+        if (currentMediaItemSegments.isEmpty()) {
+            return
+        }
         Timber.d("Updating current segment")
         viewModelScope.launch(Dispatchers.Main) {
             if (currentMediaItemSegments.isEmpty()) {
@@ -845,7 +899,10 @@ internal constructor(
                         )
                     }
                     startBufferingWatchdogIfNeeded()
-                    cacheManager?.prepareForPlayback(if (item.isLiveTv) null else item.itemId)
+                    cacheManager?.prepareForPlayback(
+                        itemId = if (item.isLiveTv) null else item.itemId,
+                        clearMpvCache = player !is MPVPlayer,
+                    )
 
                     if (!item.isLiveTv) {
                         launch {
@@ -1384,9 +1441,33 @@ internal constructor(
         return pref.fallbackIndex?.takeIf { it in supportedGroups.indices }
     }
 
-    fun selectSpeed(speed: Float) {
+    private fun syncExoTunnelingForSpeedAndPip(speed: Float, inPip: Boolean) {
+        if (isUsingTestPlayer || player !is ExoPlayer) return
+        val shouldEnableTunneling = speed == 1f && !inPip
+        val currentParams = trackSelector.parameters
+        if (currentParams.tunnelingEnabled != shouldEnableTunneling) {
+            trackSelector.setParameters(
+                currentParams.buildUpon().setTunnelingEnabled(shouldEnableTunneling)
+            )
+        }
+    }
+
+    fun updatePictureInPictureMode(inPip: Boolean) {
+        isInPictureInPictureMode = inPip
+        syncExoTunnelingForSpeedAndPip(activePlaybackSpeed, inPip)
+    }
+
+    fun applyTemporarySpeed(speed: Float) {
+        activePlaybackSpeed = speed
+        syncExoTunnelingForSpeedAndPip(speed, isInPictureInPictureMode)
         player.setPlaybackSpeed(speed)
+    }
+
+    fun selectSpeed(speed: Float) {
         playbackSpeed = speed
+        activePlaybackSpeed = speed
+        syncExoTunnelingForSpeedAndPip(speed, isInPictureInPictureMode)
+        player.setPlaybackSpeed(speed)
     }
 
     private suspend fun getSegments(itemId: UUID) {

@@ -19,54 +19,66 @@ fun BaseItemDto.toJellyxImages(jellyfinRepository: JellyfinRepository): JellyxIm
     val baseUrl = Uri.parse(jellyfinRepository.getBaseUrl())
     val primary =
         imageTags?.get(ImageType.PRIMARY)?.let { tag ->
-            baseUrl
-                .buildUpon()
-                .appendEncodedPath("items/$id/Images/${ImageType.PRIMARY}")
-                .appendQueryParameter("tag", tag)
-                .build()
+            buildScaledImageUri(
+                baseUrl = baseUrl,
+                encodedPath = "items/$id/Images/${ImageType.PRIMARY}",
+                tag = tag,
+                maxWidth = PRIMARY_MAX_WIDTH,
+                quality = PRIMARY_QUALITY,
+            )
         }
     val backdrop =
         backdropImageTags?.firstOrNull()?.let { tag ->
-            baseUrl
-                .buildUpon()
-                .appendEncodedPath("items/$id/Images/${ImageType.BACKDROP}/0")
-                .appendQueryParameter("tag", tag)
-                .build()
+            buildScaledImageUri(
+                baseUrl = baseUrl,
+                encodedPath = "items/$id/Images/${ImageType.BACKDROP}/0",
+                tag = tag,
+                maxWidth = BACKDROP_MAX_WIDTH,
+                quality = BACKDROP_QUALITY,
+            )
         }
     val logo =
         imageTags?.get(ImageType.LOGO)?.let { tag ->
-            baseUrl
-                .buildUpon()
-                .appendEncodedPath("items/$id/Images/${ImageType.LOGO}")
-                .appendQueryParameter("tag", tag)
-                .build()
+            buildScaledImageUri(
+                baseUrl = baseUrl,
+                encodedPath = "items/$id/Images/${ImageType.LOGO}",
+                tag = tag,
+                maxWidth = LOGO_MAX_WIDTH,
+                quality = LOGO_QUALITY,
+            )
         }
     val showPrimary =
         seriesId?.let { sId ->
-            baseUrl
-                .buildUpon()
-                .appendEncodedPath("items/$sId/Images/${ImageType.PRIMARY}")
-                .apply { seriesPrimaryImageTag?.let { tag -> appendQueryParameter("tag", tag) } }
-                .build()
+            buildScaledImageUri(
+                baseUrl = baseUrl,
+                encodedPath = "items/$sId/Images/${ImageType.PRIMARY}",
+                tag = seriesPrimaryImageTag,
+                maxWidth = PRIMARY_MAX_WIDTH,
+                quality = PRIMARY_QUALITY,
+            )
         }
     val backdropOwnerId = parentBackdropItemId ?: seriesId
     val parentBackdropTag = parentBackdropImageTags?.firstOrNull()
     val showBackdrop =
         backdropOwnerId?.let { ownerId ->
-            baseUrl
-                .buildUpon()
-                .appendEncodedPath("items/$ownerId/Images/${ImageType.BACKDROP}/0")
-                .apply { parentBackdropTag?.let { tag -> appendQueryParameter("tag", tag) } }
-                .build()
+            buildScaledImageUri(
+                baseUrl = baseUrl,
+                encodedPath = "items/$ownerId/Images/${ImageType.BACKDROP}/0",
+                tag = parentBackdropTag,
+                maxWidth = BACKDROP_MAX_WIDTH,
+                quality = BACKDROP_QUALITY,
+            )
         }
     val showLogo =
         (parentLogoItemId ?: seriesId)?.let { ownerId ->
             parentLogoImageTag?.let { tag ->
-                baseUrl
-                    .buildUpon()
-                    .appendEncodedPath("items/$ownerId/Images/${ImageType.LOGO}")
-                    .appendQueryParameter("tag", tag)
-                    .build()
+                buildScaledImageUri(
+                    baseUrl = baseUrl,
+                    encodedPath = "items/$ownerId/Images/${ImageType.LOGO}",
+                    tag = tag,
+                    maxWidth = LOGO_MAX_WIDTH,
+                    quality = LOGO_QUALITY,
+                )
             }
         }
 
@@ -79,6 +91,28 @@ fun BaseItemDto.toJellyxImages(jellyfinRepository: JellyfinRepository): JellyxIm
         showLogo = showLogo,
     )
 }
+
+private const val PRIMARY_MAX_WIDTH = "500"
+private const val PRIMARY_QUALITY = "85"
+private const val BACKDROP_MAX_WIDTH = "1280"
+private const val BACKDROP_QUALITY = "85"
+private const val LOGO_MAX_WIDTH = "600"
+private const val LOGO_QUALITY = "90"
+
+private fun buildScaledImageUri(
+    baseUrl: Uri,
+    encodedPath: String,
+    tag: String?,
+    maxWidth: String,
+    quality: String,
+): Uri =
+    baseUrl
+        .buildUpon()
+        .appendEncodedPath(encodedPath)
+        .apply { tag?.let { appendQueryParameter("tag", it) } }
+        .appendQueryParameter("maxWidth", maxWidth)
+        .appendQueryParameter("quality", quality)
+        .build()
 
 fun JellyxMovieDto.toLocalJellyxImages(itemId: UUID): JellyxImages {
     return JellyxImages(

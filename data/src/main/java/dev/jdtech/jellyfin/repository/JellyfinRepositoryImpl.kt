@@ -618,7 +618,7 @@ class JellyfinRepositoryImpl(
         limit: Int,
     ): List<JellyxItem> =
         withContext(Dispatchers.IO) {
-            val userId = jellyfinApi.userId!!
+            val userId = jellyfinApi.userId ?: return@withContext emptyList()
             val now = LocalDateTime.now()
 
             when (collectionType) {
@@ -1168,6 +1168,12 @@ class JellyfinRepositoryImpl(
         }
 
     override suspend fun getLiveTvChannels(): List<JellyxChannel> =
+        fetchLiveTvChannels(limit = null)
+
+    override suspend fun getLiveTvChannelsPreview(limit: Int): List<JellyxChannel> =
+        fetchLiveTvChannels(limit = limit)
+
+    private suspend fun fetchLiveTvChannels(limit: Int?): List<JellyxChannel> =
         withContext(Dispatchers.IO) {
             val rawChannels =
                 jellyfinApi.liveTvApi
@@ -1176,6 +1182,7 @@ class JellyfinRepositoryImpl(
                         addCurrentProgram = true,
                         enableUserData = true,
                         enableImages = true,
+                        limit = limit,
                         fields = listOf(ItemFields.TAGS, ItemFields.GENRES, ItemFields.OVERVIEW),
                     )
                     .content
@@ -1214,18 +1221,11 @@ class JellyfinRepositoryImpl(
 
             rawChannels
                 .map { dto ->
-                    val (currentProg, nextProg) =
-                        resolveChannelPrograms(
-                            dtoCurrentProgram = dto.currentProgram?.toJellyxProgram(),
-                            channelPrograms = programsByChannel[dto.id].orEmpty(),
-                            now = now,
-                        )
-                    val mapped = dto.toJellyxChannel(this@JellyfinRepositoryImpl, nextProg)
-                    if (mapped.currentProgram == null && currentProg != null) {
-                        mapped.copy(currentProgram = currentProg)
-                    } else {
-                        mapped
-                    }
+                    mapChannelDto(
+                        dto = dto,
+                        channelPrograms = programsByChannel[dto.id].orEmpty(),
+                        now = now,
+                    )
                 }
                 .sortedWith(
                     compareByDescending<JellyxChannel> { it.favorite }
@@ -1260,19 +1260,27 @@ class JellyfinRepositoryImpl(
                             .map { it.toJellyxProgram() }
                     }
                     .getOrDefault(emptyList())
-            val (currentProg, nextProg) =
-                resolveChannelPrograms(
-                    dtoCurrentProgram = dto.currentProgram?.toJellyxProgram(),
-                    channelPrograms = channelPrograms,
-                    now = now,
-                )
-            val mapped = dto.toJellyxChannel(this@JellyfinRepositoryImpl, nextProg)
-            if (mapped.currentProgram == null && currentProg != null) {
-                mapped.copy(currentProgram = currentProg)
-            } else {
-                mapped
-            }
+            mapChannelDto(dto = dto, channelPrograms = channelPrograms, now = now)
         }
+
+    private suspend fun mapChannelDto(
+        dto: BaseItemDto,
+        channelPrograms: List<JellyxProgram>,
+        now: LocalDateTime,
+    ): JellyxChannel {
+        val (currentProg, nextProg) =
+            resolveChannelPrograms(
+                dtoCurrentProgram = dto.currentProgram?.toJellyxProgram(),
+                channelPrograms = channelPrograms,
+                now = now,
+            )
+        val mapped = dto.toJellyxChannel(this@JellyfinRepositoryImpl, nextProg)
+        return if (mapped.currentProgram == null && currentProg != null) {
+            mapped.copy(currentProgram = currentProg)
+        } else {
+            mapped
+        }
+    }
 
     private fun resolveChannelPrograms(
         dtoCurrentProgram: JellyxProgram?,

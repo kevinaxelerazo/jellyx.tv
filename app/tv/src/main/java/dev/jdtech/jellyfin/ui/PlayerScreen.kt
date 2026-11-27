@@ -145,12 +145,12 @@ fun PlayerScreen(
             // Handle creation and release of media session
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
-                    mediaSession?.release()
+                    runCatching { mediaSession?.release() }
                     mediaSession = null
                 }
 
                 Lifecycle.Event.ON_START -> {
-                    mediaSession?.release()
+                    runCatching { mediaSession?.release() }
                     mediaSession = MediaSession.Builder(context, activePlayer).build()
                 }
 
@@ -158,10 +158,17 @@ fun PlayerScreen(
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
+        if (
+            lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) &&
+                mediaSession == null
+        ) {
+            runCatching { mediaSession?.release() }
+            mediaSession = MediaSession.Builder(context, activePlayer).build()
+        }
 
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            mediaSession?.release()
+            runCatching { mediaSession?.release() }
             mediaSession = null
         }
     }
@@ -237,7 +244,9 @@ fun PlayerScreen(
             isPlaying = activePlayer.isPlaying
             isBuffering = activePlayer.playbackState == Player.STATE_BUFFERING
             bufferAheadSec = viewModel.getLiveBufferAheadSec()
-            viewModel.updateCurrentSegment()
+            if (uiState.fileLoaded && !uiState.isLiveTv) {
+                viewModel.updateCurrentSegment()
+            }
             if (showStatsOverlay) {
                 statsText = viewModel.getPlaybackStatsText()
             }

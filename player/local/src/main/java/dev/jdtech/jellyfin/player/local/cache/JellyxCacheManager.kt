@@ -1,5 +1,6 @@
 package dev.jdtech.jellyfin.player.local.cache
 
+import android.app.ActivityManager
 import android.app.UiModeManager
 import android.content.Context
 import android.content.pm.PackageManager
@@ -46,11 +47,26 @@ constructor(
     private val secretKey: ByteArray by lazy { loadOrCreateSecretKey(context) }
 
     val isTelevisionDevice: Boolean by lazy {
-        val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as UiModeManager?
+        val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
         val isTvMode = uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
         val hasLeanback =
             context.packageManager?.hasSystemFeature(PackageManager.FEATURE_LEANBACK) == true
         isTvMode || hasLeanback
+    }
+
+    private val activityManager: ActivityManager? by lazy {
+        context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+    }
+
+    private val isLowRamDevice: Boolean by lazy {
+        activityManager?.isLowRamDevice == true
+    }
+
+    private val totalRamMb: Long by lazy {
+        val am = activityManager ?: return@lazy 0L
+        val memoryInfo = ActivityManager.MemoryInfo()
+        am.getMemoryInfo(memoryInfo)
+        if (memoryInfo.totalMem > 0L) memoryInfo.totalMem / (1024L * 1024L) else 0L
     }
 
     private val maxCacheBytes: Long by lazy {
@@ -62,21 +78,51 @@ constructor(
 
     @Volatile private var simpleCacheInstance: SimpleCache? = null
 
+    internal var simpleCacheFactory: (File) -> SimpleCache = { cacheDir ->
+        val evictor = LeastRecentlyUsedCacheEvictor(maxCacheBytes)
+        val dbProvider = StandaloneDatabaseProvider(context)
+        SimpleCache(cacheDir, evictor, dbProvider, secretKey, true, true)
+    }
+
     val simpleCache: SimpleCache
         get() =
             simpleCacheInstance
                 ?: synchronized(cacheLock) {
-                    simpleCacheInstance
-                        ?: run {
-                            val cacheDir =
-                                File(context.cacheDir, SESSION_CACHE_DIR_NAME).apply { mkdirs() }
-                            val evictor = LeastRecentlyUsedCacheEvictor(maxCacheBytes)
-                            val dbProvider = StandaloneDatabaseProvider(context)
-                            SimpleCache(cacheDir, evictor, dbProvider, secretKey, true, true).also {
-                                simpleCacheInstance = it
-                            }
-                        }
+                    simpleCacheInstance ?: createSimpleCacheLocked()
                 }
+
+    private fun createSimpleCacheLocked(): SimpleCache {
+        val cacheDir = File(context.cacheDir, SESSION_CACHE_DIR_NAME).apply { mkdirs() }
+        return simpleCacheFactory(cacheDir).also {
+            simpleCacheInstance = it
+        }
+    }
+
+    private fun getOrCreateSimpleCacheSafely(): SimpleCache? {
+        simpleCacheInstance?.let { return it }
+        return synchronized(cacheLock) {
+            simpleCacheInstance?.let { return it }
+            runCatching { createSimpleCacheLocked() }
+                .recoverCatching { firstError ->
+                    Timber.w(firstError, "Failed to open SimpleCache; purging and retrying once")
+                    File(context.cacheDir, SESSION_CACHE_DIR_NAME).deleteRecursively()
+                    createSimpleCacheLocked()
+                }
+                .onFailure { secondError ->
+                    Timber.e(secondError, "SimpleCache unavailable; falling back to direct streaming")
+                }
+                .getOrNull()
+        }
+    }
+
+    fun shouldUseDiskCache(): Boolean {
+        val isLowRamTv =
+            isTelevisionDevice && (isLowRamDevice || (totalRamMb > 0L && totalRamMb <= LOW_RAM_THRESHOLD_MB))
+        if (isLowRamTv) return false
+        val usableSpace = runCatching { context.cacheDir.usableSpace }.getOrDefault(0L)
+        if (usableSpace in 1L until MIN_FREE_SPACE_BYTES) return false
+        return true
+    }
 
     private val evictionListener = MediaCacheEvictionListener { itemId -> evictItem(itemId) }
 
@@ -86,29 +132,34 @@ constructor(
     }
 
     fun buildCacheDataSourceFactory(upstreamFactory: DataSource.Factory): DataSource.Factory {
-        val cacheReadFactory = DataSource.Factory {
-            AesCipherDataSource(secretKey, FileDataSource())
-        }
-        val cacheWriteFactory = DataSink.Factory {
-            AesCipherDataSink(
-                secretKey,
-                CacheDataSink(simpleCache, CacheDataSink.DEFAULT_FRAGMENT_SIZE),
-                ByteArray(SCRATCH_BUFFER_SIZE_BYTES),
-            )
-        }
-        val cacheDataSourceFactory =
-            CacheDataSource.Factory()
-                .setCache(simpleCache)
-                .setUpstreamDataSourceFactory(upstreamFactory)
-                .setCacheReadDataSourceFactory(cacheReadFactory)
-                .setCacheWriteDataSinkFactory(cacheWriteFactory)
-                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-
         return DataSource.Factory {
-            LiveTvBypassDataSource(
-                directSource = upstreamFactory.createDataSource(),
-                cachedSource = cacheDataSourceFactory.createDataSource(),
-            )
+            val activeCache = if (shouldUseDiskCache()) getOrCreateSimpleCacheSafely() else null
+            if (activeCache == null) {
+                upstreamFactory.createDataSource()
+            } else {
+                val cacheReadFactory = DataSource.Factory {
+                    AesCipherDataSource(secretKey, FileDataSource())
+                }
+                val cacheWriteFactory = DataSink.Factory {
+                    AesCipherDataSink(
+                        secretKey,
+                        CacheDataSink(activeCache, CacheDataSink.DEFAULT_FRAGMENT_SIZE),
+                        ByteArray(SCRATCH_BUFFER_SIZE_BYTES),
+                    )
+                }
+                val cacheDataSourceFactory =
+                    CacheDataSource.Factory()
+                        .setCache(activeCache)
+                        .setUpstreamDataSourceFactory(upstreamFactory)
+                        .setCacheReadDataSourceFactory(cacheReadFactory)
+                        .setCacheWriteDataSinkFactory(cacheWriteFactory)
+                        .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+
+                LiveTvBypassDataSource(
+                    directSource = upstreamFactory.createDataSource(),
+                    cachedSource = cacheDataSourceFactory.createDataSource(),
+                )
+            }
         }
     }
 
@@ -129,7 +180,7 @@ constructor(
         }
     }
 
-    suspend fun prepareForPlayback(itemId: UUID?) =
+    suspend fun prepareForPlayback(itemId: UUID?, clearMpvCache: Boolean = true) =
         withContext(Dispatchers.IO) {
             synchronized(cacheLock) {
                 val previousItemId = readLastCachedItemId()
@@ -160,7 +211,9 @@ constructor(
                     }
                 }.onFailure { Timber.w(it, "Failed to purge stale playback cache") }
 
-                runCatching { File(context.cacheDir, MPV_CACHE_DIR_NAME).deleteRecursively() }
+                if (clearMpvCache) {
+                    runCatching { File(context.cacheDir, MPV_CACHE_DIR_NAME).deleteRecursively() }
+                }
                 writeLastCachedItemId(itemId)
                 deleteLegacyCacheDir()
             }
@@ -290,7 +343,9 @@ constructor(
         private const val MPV_CACHE_DIR_NAME = "mpv"
         private const val KEY_FILE_NAME = "jellyx_cache.key"
         private const val AES_KEY_BYTES = 16
-        private const val SCRATCH_BUFFER_SIZE_BYTES = 16 * 1024
+        private const val SCRATCH_BUFFER_SIZE_BYTES = 64 * 1024
+        private const val MIN_FREE_SPACE_BYTES = 512L * 1024L * 1024L
+        private const val LOW_RAM_THRESHOLD_MB = 2500L
         private const val TV_MAX_CACHE_BYTES = 150L * 1024L * 1024L // 150 MB cap on TV
         private const val MOBILE_MAX_CACHE_BYTES = 300L * 1024L * 1024L // 300 MB cap on Mobile
     }

@@ -66,7 +66,7 @@ fun HomeCarousel(
         contentTransformEndToStart = fadeIn(tween(1000)).togetherWith(fadeOut(tween(1000))),
         contentTransformStartToEnd = fadeIn(tween(1000)).togetherWith(fadeOut(tween(1000))),
     ) { itemIndex ->
-        val item = items[itemIndex]
+        val item = items.getOrNull(itemIndex) ?: return@Carousel
         HomeCarouselItem(item = item, onAction = onAction)
     }
 }

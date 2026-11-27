@@ -140,6 +140,8 @@ interface JellyfinRepository {
 
     suspend fun getLiveTvChannels(): List<JellyxChannel>
 
+    suspend fun getLiveTvChannelsPreview(limit: Int = 16): List<JellyxChannel>
+
     suspend fun getLiveTvChannel(channelId: UUID): JellyxChannel
 
     suspend fun getSyncPlayGroups(): List<SyncPlayGroupInfo>

@@ -85,6 +85,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.ui.DefaultTimeBar
 import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.PlayerView
@@ -108,6 +109,7 @@ import dev.jdtech.jellyfin.presentation.player.SpeedSelectionDialogFragment
 import dev.jdtech.jellyfin.presentation.player.TrackSelectionDialogFragment
 import dev.jdtech.jellyfin.presentation.theme.JellyxTheme
 import dev.jdtech.jellyfin.settings.domain.AppPreferences
+import dev.jdtech.jellyfin.utils.PipParamsHelper
 import dev.jdtech.jellyfin.utils.PlayerGestureHelper
 import dev.jdtech.jellyfin.utils.PreviewScrubListener
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -132,16 +134,34 @@ class PlayerActivity : BasePlayerActivity() {
     private var playerGestureHelper: PlayerGestureHelper? = null
     override val viewModel: PlayerViewModel by viewModels()
     private var previewScrubListener: PreviewScrubListener? = null
+    private var liveTvOverlayComposeView: ComposeView? = null
+    private var playbackEndedComposeView: ComposeView? = null
     private var wasZoom: Boolean = false
     private val isControllerVisibleState = mutableStateOf(false)
     private val showLiveChannelDrawerState = mutableStateOf(false)
     private val showEpisodesDrawerState = mutableStateOf(false)
     private val isInPipState = mutableStateOf(false)
     private val isBufferingState = mutableStateOf(true)
-    private val bufferingListener =
+    private val playerUiListener =
         object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBufferingState.value = playbackState == Player.STATE_BUFFERING
+                if (playbackState == Player.STATE_READY) {
+                    updatePipParams()
+                }
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+                updatePipParams(isPlaying)
+            }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                updatePipParams()
             }
         }
 
@@ -197,7 +217,7 @@ class PlayerActivity : BasePlayerActivity() {
             },
         )
 
-        val liveTvOverlayComposeView =
+        val liveTvOverlayView =
             ComposeView(this).apply {
                 setContent {
                     JellyxTheme {
@@ -370,15 +390,16 @@ class PlayerActivity : BasePlayerActivity() {
                     }
                 }
             }
+        liveTvOverlayComposeView = liveTvOverlayView
         (binding.root as? ViewGroup)?.addView(
-            liveTvOverlayComposeView,
+            liveTvOverlayView,
             ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
 
-        val playbackEndedComposeView =
+        val playbackEndedView =
             ComposeView(this).apply {
                 isVisible = false
                 setContent {
@@ -412,8 +433,9 @@ class PlayerActivity : BasePlayerActivity() {
                     }
                 }
             }
+        playbackEndedComposeView = playbackEndedView
         (binding.root as? ViewGroup)?.addView(
-            playbackEndedComposeView,
+            playbackEndedView,
             ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -421,7 +443,7 @@ class PlayerActivity : BasePlayerActivity() {
         )
 
         binding.playerView.player = viewModel.player
-        viewModel.player.addListener(bufferingListener)
+        viewModel.player.addListener(playerUiListener)
         isBufferingState.value =
             viewModel.player.playbackState == Player.STATE_BUFFERING ||
                 !viewModel.uiState.value.fileLoaded
@@ -617,7 +639,7 @@ class PlayerActivity : BasePlayerActivity() {
                         uiState.apply {
                             val showEndOverlay =
                                 playbackEnded && similarItems.isNotEmpty() && !isInPictureInPictureMode
-                            playbackEndedComposeView.isVisible = showEndOverlay
+                            playbackEndedComposeView?.isVisible = showEndOverlay
                             if (showEndOverlay) {
                                 binding.playerView.hideController()
                             }
@@ -705,11 +727,17 @@ class PlayerActivity : BasePlayerActivity() {
                         when (event) {
                             is PlayerEvents.NavigateBack -> finishPlayback()
                             is PlayerEvents.PlayerSwitched -> {
-                                binding.playerView.player?.removeListener(bufferingListener)
+                                binding.playerView.player?.removeListener(playerUiListener)
                                 binding.playerView.player = event.newPlayer
-                                event.newPlayer.addListener(bufferingListener)
+                                event.newPlayer.addListener(playerUiListener)
+                                updateMediaSessionPlayer(event.newPlayer)
+                                previewScrubListener?.updatePlayer(event.newPlayer)
+                                playerGestureHelper?.updateZoomMode(
+                                    playerGestureHelper?.isZoomEnabled == true
+                                )
                                 isBufferingState.value =
                                     event.newPlayer.playbackState == Player.STATE_BUFFERING
+                                updatePipParams()
                             }
                             is PlayerEvents.IsPlayingChanged -> {
                                 if (event.isPlaying) {
@@ -720,11 +748,7 @@ class PlayerActivity : BasePlayerActivity() {
                                     )
                                 }
 
-                                if (appPreferences.getValue(appPreferences.playerPipGesture)) {
-                                    try {
-                                        setPictureInPictureParams(pipParams(event.isPlaying))
-                                    } catch (_: IllegalArgumentException) {}
-                                }
+                                updatePipParams(event.isPlaying)
                             }
                         }
                     }
@@ -813,6 +837,7 @@ class PlayerActivity : BasePlayerActivity() {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
             isControlsLocked = true
             updateSkipSegmentButton()
+            updatePipParams()
         }
 
         unlockButton.setOnClickListener {
@@ -821,6 +846,7 @@ class PlayerActivity : BasePlayerActivity() {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             isControlsLocked = false
             updateSkipSegmentButton()
+            updatePipParams()
         }
 
         subtitleButton.setOnClickListener {
@@ -884,7 +910,7 @@ class PlayerActivity : BasePlayerActivity() {
 
     override fun onDestroy() {
         if (::binding.isInitialized) {
-            binding.playerView.player?.removeListener(bufferingListener)
+            binding.playerView.player?.removeListener(playerUiListener)
         }
         super.onDestroy()
     }
@@ -950,63 +976,65 @@ class PlayerActivity : BasePlayerActivity() {
     }
 
     private fun pipParams(
-        enableAutoEnter: Boolean = viewModel.player.isPlaying
+        enableAutoEnter: Boolean =
+            appPreferences.getValue(appPreferences.playerPipGesture) &&
+                viewModel.player.isPlaying &&
+                !isControlsLocked
     ): PictureInPictureParams {
-        val displayAspectRatio = Rational(binding.playerView.width, binding.playerView.height)
-
-        val aspectRatio =
-            binding.playerView.player?.videoSize?.let {
-                Rational(
-                    it.width.coerceAtMost((it.height * 2.39f).toInt()),
-                    it.height.coerceAtMost((it.width * 2.39f).toInt()),
-                )
-            }
-
-        val sourceRectHint =
-            if (displayAspectRatio < aspectRatio!!) {
-                val space =
-                    ((binding.playerView.height -
-                            (binding.playerView.width.toFloat() / aspectRatio.toFloat())) / 2)
-                        .toInt()
-                Rect(
-                    0,
-                    space,
-                    binding.playerView.width,
-                    (binding.playerView.width.toFloat() / aspectRatio.toFloat()).toInt() + space,
-                )
-            } else {
-                val space =
-                    ((binding.playerView.width -
-                            (binding.playerView.height.toFloat() * aspectRatio.toFloat())) / 2)
-                        .toInt()
-                Rect(
-                    space,
-                    0,
-                    (binding.playerView.height.toFloat() * aspectRatio.toFloat()).toInt() + space,
-                    binding.playerView.height,
-                )
-            }
+        val videoSize = binding.playerView.player?.videoSize ?: VideoSize.UNKNOWN
+        val geometry =
+            PipParamsHelper.computeSafePipGeometry(
+                videoWidth = videoSize.width,
+                videoHeight = videoSize.height,
+                pixelWidthHeightRatio = videoSize.pixelWidthHeightRatio,
+                viewWidth = binding.playerView.width,
+                viewHeight = binding.playerView.height,
+            )
 
         val builder =
             PictureInPictureParams.Builder()
-                .setAspectRatio(aspectRatio)
-                .setSourceRectHint(sourceRectHint)
+                .setAspectRatio(Rational(geometry.aspectNumerator, geometry.aspectDenominator))
+
+        if (geometry.hasValidSourceRect) {
+            builder.setSourceRectHint(
+                Rect(
+                    geometry.sourceLeft,
+                    geometry.sourceTop,
+                    geometry.sourceRight,
+                    geometry.sourceBottom,
+                )
+            )
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setAutoEnterEnabled(enableAutoEnter)
+            builder.setSeamlessResizeEnabled(true)
         }
 
         return builder.build()
     }
 
+    private fun updatePipParams(isPlaying: Boolean = viewModel.player.isPlaying) {
+        if (!isPipSupported || isFinishing || isDestroyed || !::binding.isInitialized) {
+            return
+        }
+        val autoEnter =
+            appPreferences.getValue(appPreferences.playerPipGesture) &&
+                isPlaying &&
+                !isControlsLocked
+        runCatching { setPictureInPictureParams(pipParams(enableAutoEnter = autoEnter)) }
+            .onFailure { Timber.w(it, "Failed to update PiP params") }
+    }
+
     private fun pictureInPicture() {
-        if (!isPipSupported) {
+        if (!isPipSupported || isFinishing || isDestroyed) {
             return
         }
 
-        try {
-            enterPictureInPictureMode(pipParams())
-        } catch (_: IllegalArgumentException) {}
+        val autoEnter =
+            appPreferences.getValue(appPreferences.playerPipGesture) && viewModel.player.isPlaying
+        runCatching { enterPictureInPictureMode(pipParams(enableAutoEnter = autoEnter)) }
+            .onFailure { Timber.w(it, "Failed to enter PiP mode") }
     }
 
     override fun onPictureInPictureModeChanged(
@@ -1015,11 +1043,14 @@ class PlayerActivity : BasePlayerActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipState.value = isInPictureInPictureMode
-        viewModel.isInPictureInPictureMode = isInPictureInPictureMode
+        viewModel.updatePictureInPictureMode(isInPictureInPictureMode)
+        liveTvOverlayComposeView?.isVisible = !isInPictureInPictureMode
         when (isInPictureInPictureMode) {
             true -> {
                 binding.playerView.useController = false
+                binding.playerView.hideController()
                 skipSegmentButton.isVisible = false
+                playbackEndedComposeView?.isVisible = false
 
                 wasZoom = playerGestureHelper?.isZoomEnabled == true
                 playerGestureHelper?.updateZoomMode(false)
@@ -1035,6 +1066,10 @@ class PlayerActivity : BasePlayerActivity() {
                 binding.playerView.useController = true
                 playerGestureHelper?.updateZoomMode(wasZoom)
                 updateSkipSegmentButton()
+                val state = viewModel.uiState.value
+                playbackEndedComposeView?.isVisible =
+                    state.playbackEnded && state.similarItems.isNotEmpty()
+                updatePipParams()
 
                 // Override auto brightness
                 if (

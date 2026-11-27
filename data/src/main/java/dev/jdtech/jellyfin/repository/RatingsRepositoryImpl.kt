@@ -25,11 +25,7 @@ class RatingsRepositoryImpl(
     private val omdbApiKey: String = BuildConfig.OMDB_API_KEY,
     private val tmdbApiKey: String = BuildConfig.TMDB_API_KEY,
     private val mdblistApiKey: String = BuildConfig.MDBLIST_API_KEY,
-    private val httpClient: OkHttpClient =
-        OkHttpClient.Builder()
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(5, TimeUnit.SECONDS)
-            .build(),
+    private val httpClient: OkHttpClient = DEFAULT_HTTP_CLIENT,
     private val clockMs: () -> Long = System::currentTimeMillis,
 ) : RatingsRepository {
 
@@ -272,5 +268,12 @@ class RatingsRepositoryImpl(
     companion object {
         private const val RT_FRESH_THRESHOLD = 60
         const val CACHE_TTL_MS = 7L * 24L * 60L * 60L * 1000L
+
+        private val DEFAULT_HTTP_CLIENT: OkHttpClient by lazy {
+            OkHttpClient.Builder()
+                .connectTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
+                .build()
+        }
     }
 }
